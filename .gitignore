@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+# Generated reports contain PHI — never commit them.
+morpheus_reports/
+*.pdf
+*.docx
+*.zip
