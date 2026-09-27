@@ -10,3 +10,4 @@ morpheus_reports/
 *.pdf
 *.docx
 *.zip
+.installed

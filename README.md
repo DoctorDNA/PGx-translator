@@ -14,6 +14,14 @@ Converts a **Quest Diagnostics Pharmacogenomics Panel** PDF into **Morpheus Prec
 python3 -m pip install -r requirements.txt
 ```
 
+## Windows quick start
+
+1. Install Python from python.org (the Python install manager is fine). If it asks to add the
+   commands directory to your PATH, answer **y**.
+2. Put this folder wherever you like (for example `D:\PGx-translator`).
+3. Double-click **Start Web Page.bat**, or drag a Quest PDF onto **Convert (drag PDF here).bat**.
+   The first run installs the libraries it needs; reports are saved in `morpheus_reports`.
+
 ## Use
 
 **Command line**
