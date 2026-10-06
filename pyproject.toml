@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pgx-translator"
-version = "1.0.0"
+version = "1.1.0"
 description = "Convert Quest Diagnostics pharmacogenomics reports into Morpheus Precision Health reports"
 requires-python = ">=3.9"
 dependencies = ["pdfplumber>=0.10", "reportlab>=4.0", "python-docx>=1.0"]

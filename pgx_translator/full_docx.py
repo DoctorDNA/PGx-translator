@@ -14,9 +14,9 @@ from docx.shared import Inches, Pt, RGBColor
 
 from .fonts import ASSETS
 from .phenotypes import GREEN, RED, YELLOW
-from .report_text import (HOW_TO_READ, QUICK_REF_NOTE, REPORT_GUIDE, SHARE_NOTE, footer_text,
-                          interpretation_notes, patient_rows)
-from .rules import GENE_KEY_DRUGS
+from .report_text import (HOW_TO_READ, LINK_BLUE, LINK_HINT, QUICK_REF_NOTE, REPORT_GUIDE, SHARE_NOTE,
+                          STATUS_LABEL, drug_anchor, footer_text, interpretation_notes, key_drug_segments,
+                          patient_rows)
 from .summary import Summary
 
 NAVY = RGBColor(0x0A, 0x16, 0x28)
@@ -118,15 +118,17 @@ def _repeat_header(row):
     trPr.append(el)
 
 
-def _table(doc, rows, widths):
+def _table(doc, rows, widths, pad=60):
     t = doc.add_table(rows=rows, cols=len(widths))
     t.alignment = WD_TABLE_ALIGNMENT.CENTER
     t.autofit = False
+    for col, w in zip(t.columns, widths):  # grid widths (Word/LibreOffice use these for layout)
+        col.width = w
     for row in t.rows:
         _no_split(row)
         for cell, w in zip(row.cells, widths):
             cell.width = w
-            _margins(cell)
+            _margins(cell, top=pad, bottom=pad)
     return t
 
 
@@ -148,11 +150,11 @@ def _page_break(doc):
     doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
 
-def _header_cells(t, labels):
+def _header_cells(t, labels, size=8.5):
     row = t.rows[0]
     _repeat_header(row)
     for cell, label in zip(row.cells, labels):
-        _cell_text(cell, label, bold=True)
+        _cell_text(cell, label, bold=True, size=size)
         _shade(cell, "F2F2F2")
         _borders(cell, top=("0A1628", 18))
 
@@ -168,6 +170,94 @@ def _tier_row(row, tier):
         if i == n - 1:
             sides["right"] = (color, 18)
         _borders(cell, **sides)
+
+
+_bookmark_id = [0]
+
+
+def _link(p, text, anchor, size, bold=False):
+    """Internal hyperlink to a bookmark (blue, underlined)."""
+    h = OxmlElement("w:hyperlink")
+    h.set(qn("w:anchor"), anchor)
+    h.set(qn("w:history"), "1")
+    r = OxmlElement("w:r")
+    rPr = OxmlElement("w:rPr")
+    fonts = OxmlElement("w:rFonts")
+    for k in ("ascii", "hAnsi", "eastAsia", "cs"):
+        fonts.set(qn(f"w:{k}"), FONT)
+    rPr.append(fonts)
+    if bold:
+        rPr.append(OxmlElement("w:b"))
+    col = OxmlElement("w:color")
+    col.set(qn("w:val"), LINK_BLUE)
+    rPr.append(col)
+    sz = OxmlElement("w:sz")
+    sz.set(qn("w:val"), str(int(round(size * 2))))
+    rPr.append(sz)
+    u = OxmlElement("w:u")
+    u.set(qn("w:val"), "single")
+    rPr.append(u)
+    r.append(rPr)
+    t = OxmlElement("w:t")
+    t.text = text
+    t.set(qn("xml:space"), "preserve")
+    r.append(t)
+    h.append(r)
+    p._p.append(h)
+
+
+def _bookmarked_run(p, text, anchor, **kw):
+    """Add a run wrapped in a bookmark (link target)."""
+    _bookmark_id[0] += 1
+    bid = str(_bookmark_id[0])
+    start = OxmlElement("w:bookmarkStart")
+    start.set(qn("w:id"), bid)
+    start.set(qn("w:name"), anchor)
+    p._p.append(start)
+    r = _run(p, text, **kw)
+    end = OxmlElement("w:bookmarkEnd")
+    end.set(qn("w:id"), bid)
+    p._p.append(end)
+    return r
+
+
+def _card(doc, r, bookmark: bool):
+    """One drug as a vertical card: name/status, recommendation, gene(s) + source."""
+    color = TIER_HEX[r.tier]
+    thick, thin = (color, 18), ("BFBFBF", 4)
+    widths = [Inches(1.6), Inches(5.9)]
+    t = _table(doc, 3, widths)
+    head = t.rows[0].cells[0].merge(t.rows[0].cells[1])
+    p = head.paragraphs[0]
+    if bookmark:
+        _bookmarked_run(p, r.drug.name, drug_anchor(r.drug.name), bold=True, size=15)
+    else:
+        _run(p, r.drug.name, bold=True, size=15)
+    _run(p, "   \u2013   " + STATUS_LABEL[r.tier], bold=True, size=10.5)
+    p.paragraph_format.space_after = Pt(0)
+    p.paragraph_format.keep_with_next = True
+    _borders(head, top=thick, left=thick, right=thick, bottom=thin)
+    for i, (label, value) in enumerate((("Recommendation", None), ("Gene(s)", None))):
+        row = t.rows[i + 1]
+        lab, val = row.cells
+        _cell_text(lab, label, bold=True, size=11)
+        vp = val.paragraphs[0]
+        vp.paragraph_format.space_after = Pt(0)
+        val.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        if i == 0:
+            _run(vp, r.rec.text, bold=True, size=12.5)
+            lab.paragraphs[0].paragraph_format.keep_with_next = True
+            vp.paragraph_format.keep_with_next = True
+        else:
+            _run(vp, ", ".join(r.drug.genes), size=11.5)
+            _run(vp, "          Source: ", bold=True, size=11)
+            _run(vp, r.source, size=11.5)
+        last = i == 1
+        _borders(lab, left=thick, top=thin, right=thin, bottom=thick if last else thin)
+        _borders(val, right=thick, top=thin, left=thin, bottom=thick if last else thin)
+    sp = _para(doc, space_after=0)
+    sp.paragraph_format.space_after = Pt(5)
+    sp.paragraph_format.line_spacing = Pt(4)
 
 
 # Word rejects files whose property children are out of schema order, so sort them before saving.
@@ -204,7 +294,7 @@ def _normalize_xml(doc):
 def _cover(doc, summary: Summary):
     p = _para(doc, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=6)
     p.add_run().add_picture(str(ASSETS / "logo_wide.png"), width=Inches(3.2))
-    _para(doc, "PHARMACOGENOMICS REPORT", bold=True, size=16, color=NAVY, align=WD_ALIGN_PARAGRAPH.CENTER,
+    _para(doc, "PHARMACOGENOMICS REPORT", bold=True, size=17.5, color=NAVY, align=WD_ALIGN_PARAGRAPH.CENTER,
           space_after=10)
 
     rows = patient_rows(summary)
@@ -212,7 +302,7 @@ def _cover(doc, summary: Summary):
     t = _table(doc, len(rows), widths)
     for r, vals in zip(t.rows, rows):
         for i, (cell, v) in enumerate(zip(r.cells, vals)):
-            _cell_text(cell, v, bold=(i % 2 == 0), size=10)
+            _cell_text(cell, v, bold=(i % 2 == 0), size=12.5)
             _borders(cell)
     _para(doc, space_after=6)
 
@@ -220,47 +310,57 @@ def _cover(doc, summary: Summary):
               ("Rapid or poor: avoid or change", RED)]
     t = _table(doc, 1, [Inches(2.5)] * 3)
     for cell, (label, tier) in zip(t.rows[0].cells, legend):
-        _cell_text(cell, label, bold=True, size=10, align=WD_ALIGN_PARAGRAPH.CENTER)
+        _cell_text(cell, label, bold=True, size=12.5, align=WD_ALIGN_PARAGRAPH.CENTER)
         _borders(cell, left=(TIER_HEX[tier], 36))
     _para(doc, space_after=8)
 
-    _heading(doc, "How to Read This Report")
+    _heading(doc, "How to Read This Report", size=15)
     for text in HOW_TO_READ:
-        p = _para(doc, space_after=6)
-        _rich(p, text, size=11)
-    _para(doc, "Report guide", bold=True, size=12, color=NAVY, space_before=4, space_after=3)
+        p = _para(doc, space_after=7)
+        _rich(p, text, size=14)
+    _para(doc, "Report guide", bold=True, size=15, color=NAVY, space_before=6, space_after=4)
     for label, desc in REPORT_GUIDE(summary):
         p = _para(doc, space_after=2)
         p.paragraph_format.left_indent = Inches(0.2)
         p.paragraph_format.first_line_indent = Inches(-0.15)
-        _run(p, "•  ", size=11)
-        _run(p, f"{label}: ", bold=True, size=11)
-        _run(p, desc, size=11)
-    _para(doc, SHARE_NOTE, bold=True, size=11, space_before=8)
+        p.paragraph_format.space_after = Pt(4)
+        _run(p, "•  ", size=14)
+        _run(p, f"{label}: ", bold=True, size=14)
+        _run(p, desc, size=14)
+    _para(doc, SHARE_NOTE, bold=True, size=14, space_before=10)
     _page_break(doc)
 
 
 def _gene_results(doc, summary: Summary):
-    _heading(doc, "Gene Results", rule=False)
+    _heading(doc, "Gene Results", size=15)
+    _para(doc, LINK_HINT, italic=True, size=10.5, space_after=4).paragraph_format.keep_with_next = True
     genes = summary.genes_sorted
-    widths = [Inches(1.1), Inches(1.3), Inches(1.9), Inches(3.2)]
-    t = _table(doc, len(genes) + 1, widths)
-    _header_cells(t, ["Gene", "Genotype", "Phenotype", "Key drugs affected"])
+    widths = [Inches(1.2), Inches(1.35), Inches(1.75), Inches(3.2)]
+    t = _table(doc, len(genes) + 1, widths, pad=10)
+    _header_cells(t, ["Gene", "Genotype", "Phenotype", "Key drugs affected"], size=12)
     footnote = False
     for row, g in zip(t.rows[1:], genes):
         pheno = g.phenotype
         if g.name == "CYP3A5" and g.code == "PM":
             pheno += "*"
             footnote = True
-        _cell_text(row.cells[0], g.name, bold=True)
-        _cell_text(row.cells[1], g.genotype)
-        _cell_text(row.cells[2], pheno, bold=True)
-        _cell_text(row.cells[3], GENE_KEY_DRUGS.get(g.name, ""))
+        _cell_text(row.cells[0], g.name, bold=True, size=12)
+        _cell_text(row.cells[1], g.genotype, size=12)
+        _cell_text(row.cells[2], pheno, bold=True, size=12)
+        kp = row.cells[3].paragraphs[0]
+        kp.paragraph_format.space_after = Pt(0)
+        row.cells[3].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        for text, anchor in key_drug_segments(summary, g.name):
+            if anchor:
+                _link(kp, text, anchor, size=12)
+            else:
+                _run(kp, text, size=12)
         _tier_row(row, g.tier)
-    if footnote:
-        _para(doc, "*CYP3A5 *3/*3 is the most common genotype in people of European ancestry and means "
-                   "standard tacrolimus dosing.", italic=True, size=8, space_before=3)
-    _page_break(doc)
+    note = ("*CYP3A5 *3/*3 is the most common genotype in people of European ancestry and means "
+            "standard tacrolimus dosing.") if footnote else ""
+    p = _para(doc, note, italic=True, size=9, space_before=2)
+    # page break inside the note, so a full page never leaves a blank page behind it
+    p.add_run().add_break(WD_BREAK.PAGE)
 
 
 def _quick_reference(doc, summary: Summary):
@@ -269,7 +369,7 @@ def _quick_reference(doc, summary: Summary):
     t = _table(doc, 2, [Inches(2.5)] * 3)
     for i, (label, tier) in enumerate(heads):
         hc, bc = t.rows[0].cells[i], t.rows[1].cells[i]
-        _cell_text(hc, label, bold=True, size=12, align=WD_ALIGN_PARAGRAPH.CENTER)
+        _cell_text(hc, label, bold=True, size=12.5, align=WD_ALIGN_PARAGRAPH.CENTER)
         _borders(hc, left=(TIER_HEX[tier], 36))
         _borders(bc)
         bc.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.TOP
@@ -280,47 +380,41 @@ def _quick_reference(doc, summary: Summary):
             first = False
             p.paragraph_format.space_before = Pt(6)
             p.paragraph_format.space_after = Pt(2)
-            _run(p, cat, bold=True, size=11, color=NAVY)
+            _run(p, cat, bold=True, size=11.5, color=NAVY)
             p = bc.add_paragraph()
             p.paragraph_format.space_after = Pt(4)
-            _run(p, ", ".join(r.drug.name for r in rows), size=10.5)
+            _run(p, ", ".join(r.drug.name for r in rows), size=11)
         if first:
-            _run(bc.paragraphs[0], "None", size=10.5)
-    _para(doc, QUICK_REF_NOTE, italic=True, size=7.5, space_before=3)
+            _run(bc.paragraphs[0], "None", size=11)
+    _para(doc, QUICK_REF_NOTE, italic=True, size=9, space_before=3)
     _page_break(doc)
 
 
-def _drug_tables(doc, summary: Summary, tiers, title, subtitle=""):
-    _para(doc, title, bold=True, size=14, color=NAVY, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=2)
+def _drug_tables(doc, summary: Summary, tiers, title, subtitle="", bookmark=False):
+    """Drugs as vertical cards, grouped by system. bookmark=True marks each card as a link target."""
+    _para(doc, title, bold=True, size=16, color=NAVY, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=2)
     if subtitle:
-        _para(doc, subtitle, italic=True, size=8, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=6)
-    widths = [Inches(1.3), Inches(1.3), Inches(3.85), Inches(1.05)]
+        _para(doc, subtitle, italic=True, size=9, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=6)
     for cat, rows in summary.by_category(tiers).items():
-        _heading(doc, cat, rule=False, size=12, space_before=8)
-        t = _table(doc, len(rows) + 1, widths)
-        _header_cells(t, ["Drug", "Gene(s)", "Recommendation", "Source"])
-        for row, r in zip(t.rows[1:], rows):
-            _cell_text(row.cells[0], r.drug.name, bold=True)
-            _cell_text(row.cells[1], ", ".join(r.drug.genes))
-            _cell_text(row.cells[2], r.rec.text, bold=True)
-            _cell_text(row.cells[3], r.source)
-            _tier_row(row, r.tier)
+        _heading(doc, cat, size=15, space_before=10)
+        for r in rows:
+            _card(doc, r, bookmark)
 
 
 def _notes(doc, summary: Summary):
-    _heading(doc, "Limitations & Interpretation Notes", space_before=14)
-    _para(doc, "Interpretation notes", bold=True, size=8.5, space_after=3)
+    _heading(doc, "Limitations & Interpretation Notes", size=15, space_before=14)
+    _para(doc, "Interpretation notes", bold=True, size=11, space_after=3)
     for n in interpretation_notes(summary):
         p = _para(doc, space_after=3)
-        _run(p, "•  " + n, size=8.5)
+        _run(p, "•  " + n, size=10)
 
 
 def _footer(doc, summary: Summary):
     sec = doc.sections[0]
     p = sec.footer.paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(p, footer_text(summary) + "  |  Page ", size=7.5, color=FOOT)
-    r = _run(p, "", size=7.5, color=FOOT)
+    _run(p, footer_text(summary) + "  |  Page ", size=8, color=FOOT)
+    r = _run(p, "", size=8, color=FOOT)
     for kind, text in (("begin", None), (None, "PAGE"), ("end", None)):
         if kind:
             el = OxmlElement("w:fldChar")
@@ -334,6 +428,7 @@ def _footer(doc, summary: Summary):
 
 def render_full_docx(summary: Summary, out_path: str | Path) -> Path:
     out_path = Path(out_path)
+    _bookmark_id[0] = 0
     doc = Document()
     sec = doc.sections[0]
     sec.page_width, sec.page_height = Inches(8.5), Inches(11)
@@ -354,7 +449,8 @@ def render_full_docx(summary: Summary, out_path: str | Path) -> Path:
                      "Red and yellow medications only, grouped by system. Full list of all medications "
                      "follows.")
         _page_break(doc)
-    _drug_tables(doc, summary, (RED, YELLOW, GREEN), "ALL MEDICATIONS: DETAILED RECOMMENDATIONS")
+    _drug_tables(doc, summary, (RED, YELLOW, GREEN), "ALL MEDICATIONS: DETAILED RECOMMENDATIONS",
+                 bookmark=True)
     _notes(doc, summary)
     _footer(doc, summary)
     _normalize_xml(doc)

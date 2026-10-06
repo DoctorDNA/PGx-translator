@@ -54,6 +54,16 @@ Nothing is stored; the server only listens on your own machine.
 4. `summary.py` groups drugs into the one-page cards; `onepage.py`, `full_pdf.py` and `full_docx.py` draw
    the reports. The one-pager shrinks its type automatically so it always fits on one page.
 
+### Full report layout (v1.1)
+
+- Each medication is a vertical card: name and status (Avoid or change / Adjust or monitor / Standard
+  dosing), the recommendation on its own full-width line, then gene(s) and source.
+- Drug names in the Gene Results "Key drugs affected" column are clickable links that jump to that drug's
+  card in "All Medications" (PDF in any viewer; Word with Ctrl+click). Link labels come from
+  `GENE_KEY_DRUGS` in `rules.py`; group words map to drugs in `report_text.py` (`_GROUP_TARGET`,
+  `_GROUP_EXPAND`).
+- Larger type throughout. The one-page summary is unchanged.
+
 ### Editing recommendations
 
 All clinical wording and tier logic lives in `pgx_translator/rules.py`. Each drug is a small function,

@@ -124,3 +124,18 @@ def test_renderers(report, tmp_path):
         assert len(pdf.pages) == 1
         text = pdf.pages[0].extract_text()
     assert "PAT SAMPLE" in text and "Voriconazole" in text
+
+
+def test_full_report_links(report, tmp_path):
+    """Gene Results drug names link to bookmarked drug cards in both full reports."""
+    import zipfile
+    from pgx_translator.report_text import drug_anchor
+    s = build_summary(report)
+    docx_path = render_full_docx(s, tmp_path / "r.docx")
+    xml = zipfile.ZipFile(docx_path).read("word/document.xml").decode()
+    assert xml.count("<w:hyperlink") >= 40
+    assert f'w:name="{drug_anchor("Omeprazole")}"' in xml
+    assert xml.count("w:bookmarkStart") == len(s.results)  # one target per drug card
+    pdf_path = render_full_pdf(s, tmp_path / "r.pdf")
+    data = pdf_path.read_bytes()
+    assert data.count(b"/Subtype /Link") >= 40

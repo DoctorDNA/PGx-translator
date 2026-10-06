@@ -70,3 +70,52 @@ def interpretation_notes(summary: Summary) -> list[str]:
         f"{r.specimen or 'Not provided'}{', reporting ID ' + r.reporting_id if r.reporting_id else ''}.",
     ]
     return notes
+
+
+# --------------------------------------------------------------------------- clickable drug links
+# The Gene Results "Key drugs affected" column links each drug to its card in "All Medications".
+
+import re as _re
+
+LINK_HINT = "Click or tap any underlined medication to jump to its full recommendation."
+LINK_BLUE = "0563C1"
+
+# Group words in GENE_KEY_DRUGS -> the drug card they jump to.
+_GROUP_TARGET = {"PPIs": "Omeprazole", "tertiary TCAs": "Amitriptyline", "TCAs": "Amitriptyline",
+                 "SSRIs": "Paroxetine", "NSAIDs": "Celecoxib"}
+# Group words shown as individual (each linked) drug names instead.
+_GROUP_EXPAND = {"Statins": ["Simvastatin", "Lovastatin", "Atorvastatin", "Rosuvastatin", "Pitavastatin",
+                             "Pravastatin", "Fluvastatin"],
+                 "Thiopurines": ["Azathioprine", "Mercaptopurine", "Thioguanine"]}
+
+
+def drug_anchor(name: str) -> str:
+    """Bookmark name for a drug's card, e.g. 'drug_Omeprazole'."""
+    return "drug_" + _re.sub(r"[^A-Za-z0-9]", "_", name)
+
+
+def key_drug_segments(summary: Summary, gene: str) -> list[tuple[str, str | None]]:
+    """Split a gene's key-drugs text into (text, anchor) pieces; anchor is None for plain text
+    (separators, or drugs not assessed for this patient)."""
+    from .rules import GENE_KEY_DRUGS
+    present = {r.drug.name.lower(): r.drug.name for r in summary.results}
+    out: list[tuple[str, str | None]] = []
+    for piece in _re.split(r"(, | \+ |/)", GENE_KEY_DRUGS.get(gene, "")):
+        if not piece:
+            continue
+        if piece in (", ", " + ", "/"):
+            out.append((piece, None))
+        elif piece in _GROUP_EXPAND:
+            for i, name in enumerate(_GROUP_EXPAND[piece]):
+                if i:
+                    out.append((", ", None))
+                label = name if i == 0 else name.lower()
+                out.append((label, drug_anchor(name) if name.lower() in present else None))
+        else:
+            target = _GROUP_TARGET.get(piece) or present.get(piece.lower())
+            ok = target is not None and target.lower() in present
+            out.append((piece, drug_anchor(target) if ok else None))
+    return out
+
+
+STATUS_LABEL = {"red": "AVOID OR CHANGE", "yellow": "ADJUST OR MONITOR", "green": "STANDARD DOSING"}

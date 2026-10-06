@@ -14,9 +14,9 @@ from reportlab.platypus import (CondPageBreak, Flowable, Image, KeepTogether, Pa
 
 from .fonts import ASSETS, carlito_safe as esc, register_fonts
 from .phenotypes import GREEN, RED, YELLOW
-from .report_text import (HOW_TO_READ, QUICK_REF_NOTE, REPORT_GUIDE, SHARE_NOTE, footer_text,
-                          interpretation_notes, patient_rows)
-from .rules import GENE_KEY_DRUGS
+from .report_text import (HOW_TO_READ, LINK_BLUE, LINK_HINT, QUICK_REF_NOTE, REPORT_GUIDE, SHARE_NOTE,
+                          STATUS_LABEL, drug_anchor, footer_text, interpretation_notes, key_drug_segments,
+                          patient_rows)
 from .summary import Summary
 
 NAVY = HexColor("#0A1628")
@@ -32,28 +32,35 @@ CONTENT_W = PAGE_W - 2 * MARGIN
 F, FB, FI = "Carlito", "Carlito-Bold", "Carlito-Italic"
 
 ST = {
-    "title": ParagraphStyle("title", fontName=FB, fontSize=16, leading=20, textColor=NAVY, alignment=TA_CENTER),
-    "h1c": ParagraphStyle("h1c", fontName=FB, fontSize=14, leading=18, textColor=NAVY, alignment=TA_CENTER),
-    "h1": ParagraphStyle("h1", fontName=FB, fontSize=13, leading=17, textColor=NAVY, leftIndent=5),
-    "h2": ParagraphStyle("h2", fontName=FB, fontSize=12, leading=15, textColor=NAVY, leftIndent=5,
-                         spaceBefore=10, spaceAfter=4),
-    "h3": ParagraphStyle("h3", fontName=FB, fontSize=11.5, leading=14, textColor=NAVY, spaceBefore=8,
-                         spaceAfter=3),
-    "body": ParagraphStyle("body", fontName=F, fontSize=11, leading=14.5, spaceAfter=7),
-    "bullet": ParagraphStyle("bullet", fontName=F, fontSize=11, leading=14.5, leftIndent=12,
-                             bulletIndent=0, spaceAfter=3),
-    "cell": ParagraphStyle("cell", fontName=F, fontSize=9, leading=11),
-    "cellb": ParagraphStyle("cellb", fontName=FB, fontSize=9, leading=11),
+    "title": ParagraphStyle("title", fontName=FB, fontSize=17.5, leading=22, textColor=NAVY, alignment=TA_CENTER),
+    "h1c": ParagraphStyle("h1c", fontName=FB, fontSize=16, leading=20, textColor=NAVY, alignment=TA_CENTER),
+    "h1": ParagraphStyle("h1", fontName=FB, fontSize=15, leading=19, textColor=NAVY, leftIndent=5),
+    "h3": ParagraphStyle("h3", fontName=FB, fontSize=15, leading=19, textColor=NAVY, spaceBefore=8,
+                         spaceAfter=4),
+    "body": ParagraphStyle("body", fontName=F, fontSize=14, leading=18, spaceAfter=8),
+    "bullet": ParagraphStyle("bullet", fontName=F, fontSize=14, leading=18, leftIndent=14,
+                             bulletIndent=0, spaceAfter=4),
+    "cell": ParagraphStyle("cell", fontName=F, fontSize=12, leading=14.5),
+    "cellb": ParagraphStyle("cellb", fontName=FB, fontSize=12, leading=14.5),
+    "pcell": ParagraphStyle("pcell", fontName=F, fontSize=12.5, leading=15),
+    "pcellb": ParagraphStyle("pcellb", fontName=FB, fontSize=12.5, leading=15),
     "qr": ParagraphStyle("qr", fontName=F, fontSize=11, leading=14, spaceAfter=6),
     "qrh": ParagraphStyle("qrh", fontName=FB, fontSize=11.5, leading=14, textColor=NAVY, spaceAfter=2),
-    "qrhead": ParagraphStyle("qrhead", fontName=FB, fontSize=12, leading=15, alignment=TA_CENTER),
-    "legend": ParagraphStyle("legend", fontName=FB, fontSize=10, leading=12, alignment=TA_CENTER),
-    "note": ParagraphStyle("note", fontName=FI, fontSize=7.5, leading=9.5, textColor=HexColor("#404040")),
-    "notec": ParagraphStyle("notec", fontName=FI, fontSize=8, leading=10, alignment=TA_CENTER,
+    "qrhead": ParagraphStyle("qrhead", fontName=FB, fontSize=12.5, leading=15, alignment=TA_CENTER),
+    "legend": ParagraphStyle("legend", fontName=FB, fontSize=12.5, leading=15, alignment=TA_CENTER),
+    "note": ParagraphStyle("note", fontName=FI, fontSize=9, leading=11, textColor=HexColor("#404040")),
+    "hint": ParagraphStyle("hint", fontName=FI, fontSize=10.5, leading=13, textColor=HexColor("#404040")),
+    "notec": ParagraphStyle("notec", fontName=FI, fontSize=9, leading=11, alignment=TA_CENTER,
                             textColor=HexColor("#404040")),
-    "small": ParagraphStyle("small", fontName=F, fontSize=8.5, leading=11, spaceAfter=3),
-    "smallb": ParagraphStyle("smallb", fontName=FB, fontSize=8.5, leading=11, spaceAfter=3),
+    "small": ParagraphStyle("small", fontName=F, fontSize=10, leading=13, spaceAfter=3),
+    "smallb": ParagraphStyle("smallb", fontName=FB, fontSize=11, leading=14, spaceAfter=3),
+    # drug cards
+    "cardname": ParagraphStyle("cardname", fontName=FB, fontSize=15, leading=18),
+    "cardlab": ParagraphStyle("cardlab", fontName=FB, fontSize=11, leading=14),
+    "cardrec": ParagraphStyle("cardrec", fontName=FB, fontSize=12.5, leading=15.5),
+    "cardval": ParagraphStyle("cardval", fontName=F, fontSize=11.5, leading=14),
 }
+INNER = HexColor("#BFBFBF")
 
 
 class Rule(Flowable):
@@ -80,7 +87,7 @@ def _heading(text: str) -> list:
     return [P(text, "h1"), Spacer(1, 3), Rule(), Spacer(1, 6)]
 
 
-def _boxed_row(cells: list, widths: list[float], color, box_width: float = 1.6) -> Table:
+def _boxed_row(cells: list, widths: list[float], color, box_width: float = 1.6, pad: float = 4) -> Table:
     t = Table([cells], colWidths=widths)
     t.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), box_width, color),
@@ -88,8 +95,8 @@ def _boxed_row(cells: list, widths: list[float], color, box_width: float = 1.6) 
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 5),
         ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), pad),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), pad + 1),
     ]))
     return t
 
@@ -112,7 +119,7 @@ def _cover(summary: Summary) -> list:
     logo = Image(str(ASSETS / "logo_wide.png"), width=226, height=226 * 438 / 1600)
     story += [logo, Spacer(1, 14), P("PHARMACOGENOMICS REPORT", "title"), Spacer(1, 12)]
 
-    rows = [[P(a, "cellb"), P(b, "cell"), P(c, "cellb"), P(d, "cell")] for a, b, c, d in patient_rows(summary)]
+    rows = [[P(a, "pcellb"), P(b, "pcell"), P(c, "pcellb"), P(d, "pcell")] for a, b, c, d in patient_rows(summary)]
     widths = [CONTENT_W * w for w in (0.14, 0.36, 0.14, 0.36)]
     t = Table(rows, colWidths=widths)
     t.setStyle(TableStyle([
@@ -148,9 +155,20 @@ def _cover(summary: Summary) -> list:
     return story
 
 
+def _key_drugs_para(summary: Summary, gene: str) -> Paragraph:
+    """Key-drugs cell: each drug name links to its card in All Medications."""
+    parts = []
+    for text, anchor in key_drug_segments(summary, gene):
+        if anchor:
+            parts.append(f'<a href="#{anchor}" color="#{LINK_BLUE}"><u>{esc(text)}</u></a>')
+        else:
+            parts.append(esc(text))
+    return Paragraph("".join(parts), ST["cell"])
+
+
 def _gene_table(summary: Summary) -> list:
-    story = [P("Gene Results", "h1"), Spacer(1, 8)]
-    widths = [CONTENT_W * w for w in (0.15, 0.17, 0.25, 0.43)]
+    story = [P("Gene Results", "h1"), Spacer(1, 4), P(LINK_HINT, "hint"), Spacer(1, 6)]
+    widths = [CONTENT_W * w for w in (0.155, 0.165, 0.225, 0.455)]
     story.append(_header_row(["Gene", "Genotype", "Phenotype", "Key drugs affected"], widths))
     footnote = False
     for g in summary.genes_sorted:
@@ -158,9 +176,9 @@ def _gene_table(summary: Summary) -> list:
         if g.name == "CYP3A5" and g.code == "PM":
             pheno += "*"
             footnote = True
-        story.append(Spacer(1, 2))
+        story.append(Spacer(1, 1.5))
         story.append(_boxed_row([P(g.name, "cellb"), P(g.genotype, "cell"), P(pheno, "cellb"),
-                                 P(GENE_KEY_DRUGS.get(g.name, ""), "cell")], widths, TIER_COLOR[g.tier]))
+                                 _key_drugs_para(summary, g.name)], widths, TIER_COLOR[g.tier], pad=1.5))
     if footnote:
         story += [Spacer(1, 4), P("*CYP3A5 *3/*3 is the most common genotype in people of European ancestry "
                                   "and means standard tacrolimus dosing.", "note")]
@@ -197,26 +215,44 @@ def _quick_reference(summary: Summary) -> list:
     return story
 
 
-def _drug_tables(summary: Summary, tiers, title: str, subtitle: str = "") -> list:
+def _card(r, bookmark: bool) -> Table:
+    """One drug as a vertical card: name/status, recommendation, gene(s) + source."""
+    name = esc(r.drug.name)
+    if bookmark:
+        name = f'<a name="{drug_anchor(r.drug.name)}"/>' + name
+    head = Paragraph(f'{name}<font size="10.5">&nbsp;&nbsp;&nbsp;\u2013&nbsp;&nbsp;&nbsp;'
+                     f'{STATUS_LABEL[r.tier]}</font>', ST["cardname"])
+    genes = Paragraph(f'{esc(", ".join(r.drug.genes))}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'
+                      f'<font name="{FB}" size="11">Source:</font> {esc(r.source)}', ST["cardval"])
+    data = [[head, ""],
+            [P("Recommendation", "cardlab"), P(r.rec.text, "cardrec", bold_glyphs=True)],
+            [P("Gene(s)", "cardlab"), genes]]
+    t = Table(data, colWidths=[1.6 * inch, CONTENT_W - 1.6 * inch])
+    t.setStyle(TableStyle([
+        ("SPAN", (0, 0), (1, 0)),
+        ("BOX", (0, 0), (-1, -1), 1.8, TIER_COLOR[r.tier]),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, INNER),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    return t
+
+
+def _drug_tables(summary: Summary, tiers, title: str, subtitle: str = "", bookmark: bool = False) -> list:
+    """Drugs as vertical cards, grouped by system. bookmark=True makes each card a link target."""
     story = [P(title, "h1c")]
     if subtitle:
         story += [Spacer(1, 2), P(subtitle, "notec")]
-    story.append(Spacer(1, 6))
-    widths = [CONTENT_W * w for w in (0.175, 0.17, 0.515, 0.14)]
+    story.append(Spacer(1, 8))
     for cat, rows in summary.by_category(tiers).items():
-        block = [P(cat, "h2"), _header_row(["Drug", "Gene(s)", "Recommendation", "Source"], widths)]
-        first = True
-        for r in rows:
-            row = _boxed_row([P(r.drug.name, "cellb"), P(", ".join(r.drug.genes), "cell"),
-                              P(r.rec.text, "cellb", bold_glyphs=True), P(r.source, "cell")],
-                             widths, TIER_COLOR[r.tier])
-            if first:
-                # keep the category heading with its header and first row
-                story.append(KeepTogether(block + [Spacer(1, 2), row]))
-                first = False
-            else:
-                story += [Spacer(1, 2), row]
-        story.append(Spacer(1, 8))
+        heading = [Spacer(1, 6)] + _heading(cat)
+        for i, r in enumerate(rows):
+            card = [_card(r, bookmark), Spacer(1, 7)]
+            # keep each card whole, and keep the category heading with its first card
+            story.append(KeepTogether((heading if i == 0 else []) + card))
     return story
 
 
@@ -235,7 +271,7 @@ def render_full_pdf(summary: Summary, out_path: str | Path) -> Path:
 
     def on_page(canv, doc):
         canv.saveState()
-        canv.setFont(F, 7.5)
+        canv.setFont(F, 8)
         canv.setFillColor(FOOT)
         canv.drawCentredString(PAGE_W / 2, 0.42 * inch, f"{footer}  |  Page {doc.page}")
         canv.restoreState()
@@ -254,7 +290,8 @@ def render_full_pdf(summary: Summary, out_path: str | Path) -> Path:
                               "Red and yellow medications only, grouped by system. Full list of all "
                               "medications follows.")
         story.append(PageBreak())
-    story += _drug_tables(summary, (RED, YELLOW, GREEN), "ALL MEDICATIONS: DETAILED RECOMMENDATIONS")
+    story += _drug_tables(summary, (RED, YELLOW, GREEN), "ALL MEDICATIONS: DETAILED RECOMMENDATIONS",
+                          bookmark=True)
     story += _notes(summary)
     doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
     return out_path
