@@ -192,43 +192,64 @@ def ppi_no_rec(gt: Genotypes) -> Rec:
 
 def clopidogrel(gt: Genotypes) -> Rec:
     c = gt.code("CYP2C19")
-    if c in ("IM", "PM"):
-        return Rec(RED, "Avoid standard-dose clopidogrel for ACS/PCI and neurovascular indications; use "
-                        "prasugrel or ticagrelor if not contraindicated.",
+    # CPIC 2022, Table 2 (cardiovascular) and Table 3 (neurovascular).
+    neuro = (" Neurovascular indications (stroke/TIA): consider an alternative P2Y12 inhibitor such as ticagrelor; "
+             "prasugrel is contraindicated with a history of stroke or TIA.")
+    if c == "IM":
+        return Rec(RED, "ACS and/or PCI: avoid standard-dose clopidogrel (75 mg) if possible; use prasugrel or "
+                        "ticagrelor at standard dose if no contraindication." + neuro +
+                        " Other cardiovascular indications: no CPIC recommendation.",
                    "Reduced activation; prefer prasugrel/ticagrelor for ACS/PCI.")
+    if c == "PM":
+        return Rec(RED, "ACS, PCI and other cardiovascular indications: avoid clopidogrel if possible; use "
+                        "prasugrel or ticagrelor at standard dose if no contraindication." + neuro,
+                   "Avoid; prefer prasugrel/ticagrelor (no prasugrel after stroke/TIA).")
     if c in ("UM", "RM"):
         return _std("Standard for ACS/PCI; context for other indications.",
-                    "Standard dosing. Rapid/ultrarapid status does not reduce efficacy.")
-    return _std()
+                    "If considering clopidogrel, use standard dose (75 mg/day). Rapid/ultrarapid status does not "
+                    "reduce efficacy.")
+    return _std("Standard start.", "If considering clopidogrel, use standard dose (75 mg/day).")
 
 
 # --------------------------------------------------------------------------- CYP2D6
 
-def codeine_tramadol(gt: Genotypes) -> Rec:
-    c = gt.code("CYP2D6")
-    if c == "UM":
-        return Rec(RED, "Avoid: risk of toxicity. Use a non-codeine, non-tramadol opioid or a non-opioid.",
-                   "Avoid: toxicity risk. Use a non-codeine/tramadol option.")
-    if c == "PM":
-        return Rec(RED, "Avoid: lack of efficacy. Use a non-codeine, non-tramadol opioid or a non-opioid.",
-                   "Avoid: little analgesia. Use a non-codeine/tramadol option.")
-    if c == "IM":
-        return Rec(YELLOW, "Label dosing; if no response, use a non-codeine, non-tramadol opioid.",
-                   "Usual start; tramadol may give less analgesia. Switch if ineffective.")
-    return _std("Label dosing.")
+def _codeine_like(other: str) -> Callable[[Genotypes], Rec]:
+    """CPIC 2021 opioid guideline, Tables 2 (codeine) and 3 (tramadol). `other` = the drug to avoid switching to."""
+    def rule(gt: Genotypes) -> Rec:
+        c = gt.code("CYP2D6")
+        if c == "UM":
+            return Rec(RED, "Avoid because of potential for serious toxicity. If opioid use is warranted, consider "
+                            f"a non-{other} opioid.", "Avoid: toxicity risk. Use a non-codeine/tramadol option.")
+        if c == "PM":
+            return Rec(RED, "Avoid because of possibility of diminished analgesia. If opioid use is warranted, "
+                            f"consider a non-{other} opioid.",
+                       "Avoid: little analgesia. Use a non-codeine/tramadol option.")
+        if c == "IM":
+            return Rec(YELLOW, "Use label-recommended age- or weight-specific dosing. If no response and opioid "
+                               f"use is warranted, consider a non-{other} opioid.",
+                       "Usual start; tramadol may give less analgesia. Switch if ineffective.")
+        if c == "IND":
+            return Rec(GREEN, "CYP2D6 indeterminate: no CPIC recommendation.", "No CPIC recommendation.")
+        return _std("Label dosing.", "Use label-recommended age- or weight-specific dosing.")
+    return rule
 
 
 def hydrocodone(gt: Genotypes) -> Rec:
+    """CPIC 2021 opioid guideline, Table 4."""
     c = gt.code("CYP2D6")
     if c in ("IM", "PM"):
-        return Rec(YELLOW, "Label dosing; if no response, consider a non-tramadol/codeine alternative.",
+        return Rec(YELLOW, "Use label-recommended age- or weight-specific dosing. If no response and opioid use is "
+                           "warranted, consider a non-codeine, non-tramadol opioid.",
                    "Usual start; tramadol may give less analgesia. Switch if ineffective."
                    if c == "IM" else "Label dosing; switch if ineffective.")
-    return _std("Label dosing.", "Label dosing; no CYP2D6-based change.")
+    if c in ("UM", "IND"):
+        return Rec(GREEN, "No CPIC recommendation (minimal evidence); label dosing.", "Label dosing.")
+    return _std("Label dosing.", "Use label-recommended age- or weight-specific dosing.")
 
 
 def no_cyp2d6_change(gt: Genotypes) -> Rec:
-    return Rec(GREEN, "No CYP2D6-based change.", "No CPIC dose change.")
+    # CPIC 2021 reviewed these opioids and made no CYP2D6-based recommendation.
+    return Rec(GREEN, "No CPIC recommendation based on CYP2D6; dose per usual practice.", "No CPIC dose change.")
 
 
 def antiemetic_5ht3(gt: Genotypes) -> Rec:
@@ -532,21 +553,30 @@ def phenytoin(gt: Genotypes) -> Rec:
 
 # --------------------------------------------------------------------------- HLA
 
+# CPIC 2017 update, Tables 2-3.
+_HLA_TOLERANCE = (" If the patient has taken it continuously for more than 3 months without a skin reaction, "
+                  "cautiously consider continued use.")
+_AROMATIC = (" Use caution choosing another aromatic anticonvulsant (eslicarbazepine, lamotrigine, phenytoin, "
+             "fosphenytoin, phenobarbital).")
+
+
 def carbamazepine(gt: Genotypes) -> Rec:
     if gt.code("HLA-B*15:02") == "POS":
-        return Rec(RED, "HLA-B*15:02 positive: if carbamazepine-naive, do not use (SJS/TEN risk).",
-                   "HLA-B*15:02 positive: avoid if drug-naive.")
+        return Rec(RED, "HLA-B*15:02 positive: if carbamazepine-naive, do not use (SJS/TEN risk)." + _HLA_TOLERANCE +
+                   _AROMATIC, "HLA-B*15:02 positive: avoid if drug-naive.")
     if gt.code("HLA-A*31:01") == "POS":
-        return Rec(RED, "HLA-A*31:01 positive: if carbamazepine-naive, use an alternative; if none, "
-                        "monitor closely for skin reactions.", "HLA-A*31:01 positive: prefer alternative.")
-    return _std("No tested HLA restriction.", "Standard dosing.")
+        return Rec(RED, "HLA-A*31:01 positive: if carbamazepine-naive and alternatives are available, do not use "
+                        "(SJS/TEN, DRESS, MPE risk). If no alternative, consider use with more frequent clinical "
+                        "monitoring and stop at the first sign of a skin reaction." + _HLA_TOLERANCE,
+                   "HLA-A*31:01 positive: prefer alternative.")
+    return _std("No tested HLA restriction.", "Use per standard dosing guidelines.")
 
 
 def oxcarbazepine(gt: Genotypes) -> Rec:
     if gt.code("HLA-B*15:02") == "POS":
-        return Rec(RED, "HLA-B*15:02 positive: if oxcarbazepine-naive, do not use (SJS/TEN risk).",
-                   "HLA-B*15:02 positive: avoid if drug-naive.")
-    return _std("No tested HLA restriction.", "Standard dosing.")
+        return Rec(RED, "HLA-B*15:02 positive: if oxcarbazepine-naive, do not use (SJS/TEN risk)." + _HLA_TOLERANCE +
+                   _AROMATIC, "HLA-B*15:02 positive: avoid if drug-naive.")
+    return _std("No tested HLA restriction.", "Use per standard dosing guidelines.")
 
 
 def abacavir(gt: Genotypes) -> Rec:
@@ -604,16 +634,35 @@ def fluoropyrimidine(gt: Genotypes) -> Rec:
                     "strongly reduced dose with drug-level monitoring.", "Avoid; severe toxicity risk.")
 
 
-def thiopurine(gt: Genotypes) -> Rec:
-    t, n = gt.code("TPMT"), gt.code("NUDT15")
-    if "PM" in (t, n):
-        return Rec(RED, "For non-malignant conditions use a non-thiopurine alternative; for malignancy, "
-                        "drastically reduce dose (about 10-fold, 3×/week) with close CBC monitoring.",
-                   "Prefer non-thiopurine; if needed, ~10× lower dose.")
-    if "IM" in (t, n):
-        return Rec(YELLOW, "Start at 30–80% of the normal dose (50–80% for thioguanine); adjust by "
-                           "myelosuppression.", "Start 30–80% dose; CBC monitoring.")
-    return _std("Standard start; CBC monitoring.", "Normal starting dose.")
+def _thiopurine(drug: str) -> Callable[[Genotypes], Rec]:
+    """CPIC 2025 update: Table 2 (mercaptopurine), 3 (thioguanine, malignancy), 4 (azathioprine, nonmalignant).
+    'Possible intermediate' phenotypes are treated as intermediate (the lab text contains 'Intermediate')."""
+    std_dose = {"mercaptopurine": "75 mg/m²/day for malignancy or 1.5 mg/kg/day for nonmalignancy",
+                "thioguanine": "40 mg/m²/day", "azathioprine": "2 mg/kg/day"}[drug]
+    adjust = (" If the starting dose is already below standard, a reduction may not be needed. Adjust by "
+              "myelosuppression and disease-specific guidelines; allow 2–4 weeks at each dose to reach steady state.")
+
+    def rule(gt: Genotypes) -> Rec:
+        t, n = gt.code("TPMT"), gt.code("NUDT15")
+        if "PM" in (t, n):
+            if drug == "azathioprine":
+                return Rec(RED, "Consider an alternative nonthiopurine immunosuppressant (fatal toxicity possible "
+                                "without dose decrease).", "Use a nonthiopurine alternative.")
+            text = ("Malignancy: start with drastically reduced doses (reduce the daily dose 10-fold and give 3 "
+                    "times weekly instead of daily); adjust by myelosuppression, allowing 4–6 weeks at each dose.")
+            if drug == "mercaptopurine":
+                text += " Nonmalignancy: consider an alternative nonthiopurine immunosuppressant."
+            return Rec(RED, text, "Drastic reduction (10× lower, 3×/week) or alternative.")
+        if t == "IM" and n == "IM":
+            return Rec(YELLOW, f"TPMT/NUDT15 compound intermediate: start at 20–50% of the standard dose if the "
+                               f"standard starting dose is ≥{std_dose}." + adjust,
+                       "Start 20–50% dose; CBC monitoring.")
+        if "IM" in (t, n):
+            return Rec(YELLOW, f"Start at 30–80% of the standard dose if the standard starting dose is "
+                               f"≥{std_dose}." + adjust, "Start 30–80% dose; CBC monitoring.")
+        return _std("Standard start; CBC monitoring.",
+                    f"Normal starting dose (e.g., {std_dose}); adjust per standard practice.")
+    return rule
 
 
 def atazanavir(gt: Genotypes) -> Rec:
@@ -655,7 +704,7 @@ C, P, G, Y, N, I, O, X = CATEGORIES
 
 DRUGS: list[Drug] = [
     # Cardiology & Lipids
-    Drug("Clopidogrel", C, ("CYP2C19",), clopidogrel),
+    Drug("Clopidogrel", C, ("CYP2C19",), clopidogrel, source="CPIC 2022"),
     Drug("Metoprolol", C, ("CYP2D6",), metoprolol),
     Drug("Simvastatin", C, ("SLCO1B1",), simvastatin),
     Drug("Lovastatin", C, ("SLCO1B1",), lovastatin),
@@ -670,13 +719,13 @@ DRUGS: list[Drug] = [
         RED, "Higher exposure and drug-induced lupus risk in slow acetylators.",
         "Higher exposure and lupus risk."), source="Literature"),
     # Pain & Anesthesia
-    Drug("Codeine", P, ("CYP2D6",), codeine_tramadol),
-    Drug("Tramadol", P, ("CYP2D6",), codeine_tramadol),
-    Drug("Hydrocodone", P, ("CYP2D6",), hydrocodone),
-    Drug("Oxycodone", P, ("CYP2D6",), no_cyp2d6_change),
-    Drug("Morphine", P, ("CYP2D6",), no_cyp2d6_change),
-    Drug("Hydromorphone", P, ("CYP2D6",), no_cyp2d6_change),
-    Drug("Fentanyl", P, ("CYP2D6",), no_cyp2d6_change),
+    Drug("Codeine", P, ("CYP2D6",), _codeine_like("tramadol"), source="CPIC 2021"),
+    Drug("Tramadol", P, ("CYP2D6",), _codeine_like("codeine"), source="CPIC 2021"),
+    Drug("Hydrocodone", P, ("CYP2D6",), hydrocodone, source="CPIC 2021"),
+    Drug("Oxycodone", P, ("CYP2D6",), no_cyp2d6_change, source="CPIC 2021"),
+    Drug("Morphine", P, ("CYP2D6",), no_cyp2d6_change, source="CPIC 2021"),
+    Drug("Hydromorphone", P, ("CYP2D6",), no_cyp2d6_change, source="CPIC 2021"),
+    Drug("Fentanyl", P, ("CYP2D6",), no_cyp2d6_change, source="CPIC 2021"),
     Drug("Methadone", P, ("CYP2B6",), methadone, source="Literature"),
     Drug("Midazolam", P, ("CYP3A5",), midazolam, source="Literature"),
     Drug("Ondansetron", P, ("CYP2D6",), antiemetic_5ht3),
@@ -718,8 +767,8 @@ DRUGS: list[Drug] = [
     # Neurology
     Drug("Phenytoin", N, ("CYP2C9", "HLA-B*15:02"), phenytoin),
     Drug("Fosphenytoin", N, ("CYP2C9", "HLA-B*15:02"), phenytoin),
-    Drug("Carbamazepine", N, ("HLA-B*15:02", "HLA-A*31:01"), carbamazepine),
-    Drug("Oxcarbazepine", N, ("HLA-B*15:02",), oxcarbazepine),
+    Drug("Carbamazepine", N, ("HLA-B*15:02", "HLA-A*31:01"), carbamazepine, source="CPIC 2017"),
+    Drug("Oxcarbazepine", N, ("HLA-B*15:02",), oxcarbazepine, source="CPIC 2017"),
     Drug("Amifampridine", N, ("NAT2",), amifampridine, source="FDA label"),
     # Infectious Disease
     Drug("Voriconazole", I, ("CYP2C19",), voriconazole),
@@ -740,9 +789,9 @@ DRUGS: list[Drug] = [
     Drug("Fluorouracil", O, ("DPYD",), fluoropyrimidine, short_name="5-FU"),
     Drug("Capecitabine", O, ("DPYD",), fluoropyrimidine),
     Drug("Tegafur", O, ("DPYD",), fluoropyrimidine),
-    Drug("Azathioprine", O, ("TPMT", "NUDT15"), thiopurine),
-    Drug("Mercaptopurine", O, ("TPMT", "NUDT15"), thiopurine),
-    Drug("Thioguanine", O, ("TPMT", "NUDT15"), thiopurine),
+    Drug("Azathioprine", O, ("TPMT", "NUDT15"), _thiopurine("azathioprine"), source="CPIC 2025"),
+    Drug("Mercaptopurine", O, ("TPMT", "NUDT15"), _thiopurine("mercaptopurine"), source="CPIC 2025"),
+    Drug("Thioguanine", O, ("TPMT", "NUDT15"), _thiopurine("thioguanine"), source="CPIC 2025"),
     Drug("Irinotecan", O, ("UGT1A1",), irinotecan, source="FDA/DPWG"),
     # Other
     Drug("Allopurinol", X, ("HLA-B*58:01",), allopurinol, source="CPIC 2013/2015"),

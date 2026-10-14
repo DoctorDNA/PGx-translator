@@ -163,3 +163,33 @@ def test_tca_cpic_2016(report):
     assert rec("Amitriptyline", CYP2D6=("*1/*1", "Normal Metabolizer"),
                CYP2C19=("*1/*2", "Intermediate Metabolizer")).tier == GREEN
     assert "higher target dose" in rec("Nortriptyline", CYP2D6=("*1/*1xN", "Ultra-Rapid Metabolizer")).text
+
+
+def _rec(report, drug, **genes):
+    r = with_genes(report, **genes) if genes else report
+    return next(x.rec for x in build_summary(r).results if x.drug.name == drug)
+
+
+def test_thiopurines_cpic_2025(report):
+    single = _rec(report, "Mercaptopurine", TPMT=("*1/*3A", "Intermediate Metabolizer"))
+    assert single.tier == YELLOW and "30–80%" in single.text
+    compound = _rec(report, "Azathioprine", TPMT=("*1/*3A", "Intermediate Metabolizer"),
+                    NUDT15=("*1/*3", "Intermediate Metabolizer"))
+    assert compound.tier == YELLOW and "20–50%" in compound.text
+    pm_aza = _rec(report, "Azathioprine", NUDT15=("*3/*3", "Poor Metabolizer"))
+    assert pm_aza.tier == RED and "nonthiopurine" in pm_aza.text
+    pm_tg = _rec(report, "Thioguanine", TPMT=("*3A/*3A", "Poor Metabolizer"))
+    assert "10-fold" in pm_tg.text and "Nonmalignancy" not in pm_tg.text
+
+
+def test_clopidogrel_cpic_2022(report):
+    pm = _rec(report, "Clopidogrel", CYP2C19=("*2/*2", "Poor Metabolizer"))
+    assert pm.tier == RED and "prasugrel is contraindicated with a history of stroke" in pm.text
+    assert _rec(report, "Clopidogrel").tier == GREEN  # sample is *17/*17
+
+
+def test_opioids_cpic_2021(report):
+    um = _rec(report, "Codeine", CYP2D6=("*1/*1xN", "Ultra-Rapid Metabolizer"))
+    assert um.tier == RED and "non-tramadol opioid" in um.text
+    assert "non-codeine opioid" in _rec(report, "Tramadol", CYP2D6=("*4/*4", "Poor Metabolizer")).text
+    assert _rec(report, "Hydrocodone", CYP2D6=("*1/*1xN", "Ultra-Rapid Metabolizer")).tier == GREEN
