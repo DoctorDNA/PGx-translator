@@ -246,3 +246,13 @@ def test_batch5_cpic(report):
     # SSRIs/SNRIs CYP2D6 (2023)
     assert _rec(report, "Venlafaxine", CYP2D6=("*4/*4", "Poor Metabolizer")).tier == RED
     assert _rec(report, "Vortioxetine", CYP2D6=("*1/*1xN", "Ultra-Rapid Metabolizer")).tier == RED
+
+
+def test_final_batch_cpic(report):
+    assert _rec(report, "Voriconazole", CYP2C19=("*1/*17", "Rapid Metabolizer")).tier == RED
+    pm = _rec(report, "Voriconazole", CYP2C19=("*2/*2", "Poor Metabolizer"))
+    assert "lower than standard dose" in pm.text
+    im = _rec(report, "Tamoxifen")  # sample *1/*5, AS 1.0
+    assert im.tier == YELLOW and "aromatase inhibitor" in im.text
+    assert _rec(report, "Tamoxifen", CYP2D6=("*4/*4", "Poor Metabolizer")).tier == RED
+    assert "0.3 mg/kg/day" in _rec(report, "Tacrolimus", CYP3A5=("*1/*3", "Intermediate Metabolizer")).text

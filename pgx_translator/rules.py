@@ -20,7 +20,7 @@ from typing import Callable, Optional
 
 from .phenotypes import GREEN, RED, YELLOW, Genotypes
 
-RULES_VERSION = "2.1"
+RULES_VERSION = "3.0"
 
 CATEGORIES = [
     "Cardiology & Lipids",
@@ -87,15 +87,21 @@ def _std(short: str = "Standard start.", text: str = "Standard dosing.") -> Rec:
 # --------------------------------------------------------------------------- CYP2C19
 
 def voriconazole(gt: Genotypes) -> Rec:
+    """CPIC 2016 (CPT 2017), Table 2 (adults). Children: see CPIC Table 3."""
     c = gt.code("CYP2C19")
+    alts = "isavuconazole, liposomal amphotericin B or posaconazole"
     if c in ("UM", "RM"):
-        return Rec(RED, "Use an alternative: isavuconazole, posaconazole or liposomal amphotericin B.",
+        return Rec(RED, f"Choose an alternative agent not dependent on CYP2C19 as primary therapy ({alts}); therapeutic "
+                        "concentrations are unlikely with standard dosing. Adult recommendation; see CPIC for children.",
                    "Select another antifungal; low exposure likely.")
     if c == "PM":
-        return Rec(RED, "Use an alternative not dependent on CYP2C19; if voriconazole is required, "
-                        "use a reduced dose with therapeutic drug monitoring.",
+        return Rec(RED, f"Choose an alternative agent not dependent on CYP2C19 ({alts}). If voriconazole is the most "
+                        "appropriate agent, give a preferably lower than standard dose with careful therapeutic drug "
+                        "monitoring. Adult recommendation; see CPIC for children.",
                    "Select another antifungal; toxicity risk. If used, lower dose + levels.")
-    return _std("Standard start; levels per usual practice.")
+    return _std("Standard start; levels per usual practice.",
+                "Initiate therapy with recommended standard-of-care dosing; trough levels per usual practice "
+                "(suggested 1.0–4.0 mcg/mL for most invasive mycoses).")
 
 
 def citalopram(gt: Genotypes) -> Rec:
@@ -401,17 +407,23 @@ def metoprolol(gt: Genotypes) -> Rec:
 
 
 def tamoxifen(gt: Genotypes) -> Rec:
+    """CPIC 2018, Table 2. Activity score 1.0 is split by CYP2D6*10 (optional without *10, moderate with it)."""
     c = gt.code("CYP2D6")
+    alt = ("Consider hormonal therapy such as an aromatase inhibitor for postmenopausal women, or an aromatase "
+           "inhibitor with ovarian function suppression for premenopausal women, given these are superior to tamoxifen "
+           "regardless of CYP2D6. If an aromatase inhibitor is contraindicated, consider the higher FDA-approved "
+           "tamoxifen dose (40 mg/day). Avoid moderate and strong CYP2D6 inhibitors; switch to a weak inhibitor.")
     if c == "PM":
-        return Rec(RED, "Use alternative hormonal therapy (e.g., aromatase inhibitor, with ovarian "
-                        "suppression if premenopausal). Avoid CYP2D6 inhibitors.",
+        return Rec(RED, "Recommend alternative hormonal therapy such as an aromatase inhibitor (with ovarian function "
+                        "suppression if premenopausal). Higher-dose tamoxifen (40 mg/day) increases but does not "
+                        "normalize endoxifen levels; consider it only if aromatase inhibitors are contraindicated.",
                    "Oncology review: prefer alternative hormonal therapy.")
     if c == "IM":
-        return Rec(YELLOW, "Consider 40 mg/day, or an alternative where one exists. Avoid CYP2D6 inhibitors.",
-                   "Oncology review: alternative or dose strategy; AS 1 optional."
-                   if gt.score("CYP2D6") == 1.0 else "Oncology review: alternative or 40 mg/day.")
+        return Rec(YELLOW, alt, "Oncology review: alternative or dose strategy; AS 1 optional."
+                   if gt.score("CYP2D6") == 1.0 and not gt.has_allele("CYP2D6", "*10")
+                   else "Oncology review: alternative or 40 mg/day.")
     return _std("Standard 20 mg/day; avoid CYP2D6 inhibitors.",
-                "Standard dosing (20 mg/day); avoid strong CYP2D6 inhibitors.")
+                "Initiate standard-of-care dosing (tamoxifen 20 mg/day). Avoid moderate and strong CYP2D6 inhibitors.")
 
 
 # --------------------------------------------------------------------------- CYP2B6 / CYP3A
@@ -442,16 +454,18 @@ def methadone(gt: Genotypes) -> Rec:
 
 
 def tacrolimus(gt: Genotypes) -> Rec:
+    """CPIC 2015, Table 2 (kidney, heart, lung, HSCT; liver when donor and recipient genotypes match)."""
     c = gt.code("CYP3A5")
     note = ""
     if gt.code("CYP3A4") in ("IM", "PM"):
-        note = " CYP3A4*22 may lower the dose requirement, so monitor troughs closely."
+        note = (" CYP3A4*22 (not part of the CPIC guideline) may lower the dose requirement, so monitor troughs "
+                "closely.")
     if c in ("NM", "IM"):
-        return Rec(YELLOW, "CYP3A5 expresser: increase starting dose 1.5–2× (max 0.3 mg/kg/day) and "
-                           "use therapeutic drug monitoring." + note,
-                   "Higher start (1.5–2×); drug levels.")
-    return Rec(GREEN, "Standard starting dose (CYP3A5 non-expresser); use therapeutic drug monitoring." + note,
-               "Standard start; needs drug levels.")
+        return Rec(YELLOW, "CYP3A5 expresser: increase the starting dose 1.5–2 times the recommended starting dose; "
+                           "total starting dose should not exceed 0.3 mg/kg/day. Use therapeutic drug monitoring to "
+                           "guide dose adjustments." + note, "Higher start (1.5–2×); drug levels.")
+    return Rec(GREEN, "CYP3A5 nonexpresser: initiate the standard recommended dose; use therapeutic drug monitoring to "
+                      "guide dose adjustments." + note, "Standard start; needs drug levels.")
 
 
 def midazolam(gt: Genotypes) -> Rec:
@@ -929,7 +943,7 @@ DRUGS: list[Drug] = [
     Drug("Oxcarbazepine", N, ("HLA-B*15:02",), oxcarbazepine, source="CPIC 2017"),
     Drug("Amifampridine", N, ("NAT2",), amifampridine, source="FDA label"),
     # Infectious Disease
-    Drug("Voriconazole", I, ("CYP2C19",), voriconazole),
+    Drug("Voriconazole", I, ("CYP2C19",), voriconazole, source="CPIC 2016"),
     Drug("Efavirenz", I, ("CYP2B6",), efavirenz, source="CPIC 2019"),
     Drug("Isoniazid", I, ("NAT2",), _nat2_literature(
         RED, "Higher hepatotoxicity risk in slow acetylators; consider dose reduction.",
@@ -943,8 +957,8 @@ DRUGS: list[Drug] = [
     Drug("Peginterferon alfa", I, ("IFNL3",), ifnl3, source="CPIC 2014"),
     Drug("Ribavirin", I, ("IFNL3",), ifnl3, source="CPIC 2014"),
     # Oncology, Immunology & Transplant
-    Drug("Tamoxifen", O, ("CYP2D6",), tamoxifen),
-    Drug("Tacrolimus", O, ("CYP3A5", "CYP3A4"), tacrolimus),
+    Drug("Tamoxifen", O, ("CYP2D6",), tamoxifen, source="CPIC 2018"),
+    Drug("Tacrolimus", O, ("CYP3A5", "CYP3A4"), tacrolimus, source="CPIC 2015"),
     Drug("Fluorouracil", O, ("DPYD",), _fluoropyrimidine(), source="CPIC 2017", short_name="5-FU"),
     Drug("Capecitabine", O, ("DPYD",), _fluoropyrimidine(), source="CPIC 2017"),
     Drug("Tegafur", O, ("DPYD",), _fluoropyrimidine(tegafur=True), source="CPIC 2017"),

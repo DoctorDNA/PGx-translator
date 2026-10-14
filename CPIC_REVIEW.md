@@ -33,10 +33,13 @@ A checked drug shows the guideline year in its source (e.g. "CPIC 2019") on ever
 | SLCO1B1/ABCG2/CYP2C9 & statins, 2022, Tables 2–6 | simvastatin, lovastatin, atorvastatin, rosuvastatin, pitavastatin, pravastatin, fluvastatin | **Changed.** Rosuvastatin now uses the combined SLCO1B1 × ABCG2 table (Table 5): SLCO1B1 decreased + ABCG2 normal/decreased → desired starting dose, aware of myopathy risk >20 mg → **green** (was yellow, ≤20 mg); SLCO1B1 poor → ≤20 mg (was ≤10 mg); ABCG2 poor → ≤20 mg, or ≤10 mg with SLCO1B1 decreased/poor. Fluvastatin now uses Table 6: SLCO1B1 decreased + CYP2C9 IM → ≤20 mg (was ≤40 mg); SLCO1B1 decreased + CYP2C9 PM → alternative (**red**). Other statins matched; wording aligned. | 2026-10-14 |
 | CYP2C9/HLA-B & phenytoin, 2020 update, Table 3 | phenytoin, fosphenytoin | **Changed.** CYP2C9 AS 1.5 now needs no adjustment (**green**; was yellow −25%). AS 1.0 → 25% lower maintenance; PM → 50% lower maintenance; HLA-B\*15:02 positive → avoid if naive (unchanged). Added note that a negative HLA test does not remove all SJS/TEN risk. | 2026-10-14 |
 | IFNL3 & peginterferon alfa/ribavirin, 2014, Table 2 | peginterferon alfa, ribavirin | Tiers matched; added CPIC response rates. | 2026-10-14 |
+| CYP2C19 & voriconazole, 2016 (CPT 2017), Table 2 (adults) | voriconazole | Tiers matched (UM/RM and PM → alternative; NM/IM standard). Added CPIC alternatives, PM "lower dose with careful drug monitoring if voriconazole is required", trough range, and that the pediatric table (Table 3) differs. | 2026-10-14 |
+| CYP2D6 & tamoxifen, 2018, Table 2 | tamoxifen | Tiers matched (IM incl. AS 1.0 yellow; PM red). Recommendation now leads with aromatase inhibitor (± ovarian suppression), with 40 mg/day only if aromatase inhibitors are contraindicated, and avoiding moderate/strong CYP2D6 inhibitors. | 2026-10-14 |
+| CYP3A5 & tacrolimus, 2015, Table 2 | tacrolimus | Tiers matched (expressers 1.5–2× start, max 0.3 mg/kg/day; nonexpressers standard; TDM for all). CYP3A4\*22 note kept but labeled as outside the CPIC guideline. | 2026-10-14 |
 
 ## Not yet checked
 
-Voriconazole (CYP2C19); tamoxifen (CYP2D6); warfarin (CYP2C9, VKORC1, CYP4F2); tacrolimus (CYP3A5).
+Warfarin (CYP2C9, VKORC1, CYP4F2) — the only CPIC-based rule not yet checked against its guideline.
 Esomeprazole and rabeprazole have no CPIC recommendation (listed as "CPIC (no rec)").
 
 Non-CPIC rules (Literature / FDA label / DPWG): procainamide, isoniazid, dapsone, sulfasalazine,
