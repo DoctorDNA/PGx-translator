@@ -253,10 +253,16 @@ def no_cyp2d6_change(gt: Genotypes) -> Rec:
 
 
 def antiemetic_5ht3(gt: Genotypes) -> Rec:
-    if gt.code("CYP2D6") == "UM":
-        return Rec(RED, "Select an alternative not predominantly metabolized by CYP2D6 (e.g., granisetron).",
+    """CPIC 2026 update, Table 2 (adults and children)."""
+    c = gt.code("CYP2D6")
+    if c == "UM":
+        return Rec(RED, "Select an alternative not predominantly metabolized by CYP2D6 (e.g., granisetron); consider "
+                        "interacting drugs and patient factors when choosing.",
                    "Reduced efficacy; use granisetron instead.")
-    return _std()
+    if c in ("IM", "PM", "IND"):
+        return Rec(GREEN, "No CPIC recommendation (insufficient evidence); dose per usual practice.",
+                   "No CPIC dose change.")
+    return _std("Standard start.", "Initiate therapy with recommended starting dose.")
 
 
 def atomoxetine(gt: Genotypes) -> Rec:
@@ -338,14 +344,16 @@ def fluoxetine(gt: Genotypes) -> Rec:
 
 
 def metoprolol(gt: Genotypes) -> Rec:
+    """CPIC 2024 beta-blocker guideline, Table 2."""
     c = gt.code("CYP2D6")
     if c == "PM":
-        return Rec(YELLOW, "Start low and titrate slowly to heart rate/BP; consider bisoprolol or carvedilol "
-                           "if bradycardia or intolerance.", "Low start, slow titration; bradycardia risk.")
-    if c == "UM":
-        return _std("Standard start; may need higher dose or alternative.",
-                    "Standard dosing; if response is inadequate, titrate or use bisoprolol/carvedilol.")
-    return _std("Standard start.")
+        return Rec(YELLOW, "Initiate at the lowest recommended starting dose; titrate carefully to clinical effect or "
+                           "guideline dose; monitor closely for bradycardia. Alternatively, consider another "
+                           "beta-blocker. If already tolerating a stable dose, a change is probably unnecessary.",
+                   "Low start, slow titration; bradycardia risk.")
+    if c in ("UM", "IND"):
+        return _std("Standard start.", "No CPIC recommendation (insufficient evidence); dose per usual practice.")
+    return _std("Standard start.", "Initiate standard dosing.")
 
 
 def tamoxifen(gt: Genotypes) -> Rec:
@@ -380,13 +388,13 @@ def efavirenz(gt: Genotypes) -> Rec:
 
 
 def methadone(gt: Genotypes) -> Rec:
-    if gt.code("CYP2B6") == "PM":
-        return Rec(YELLOW, "No CPIC guideline; poor CYP2B6 function may raise exposure and QT risk. "
-                           "Start low and titrate cautiously.",
-                   "Start low; higher exposure and QT risk possible.", source="Literature")
-    return Rec(GREEN, "No CPIC guideline; reduced CYP2B6 function may modestly raise exposure. "
-                      "Standard start with usual QT monitoring.",
-               "Standard start.", source="Literature")
+    """CPIC 2024, Table 2: CYP2B6 does not change methadone dosing; follow ECG monitoring guidelines."""
+    if gt.code("CYP2B6") in ("UM", "IND"):
+        return Rec(GREEN, "No CPIC recommendation for this CYP2B6 phenotype. Follow ECG monitoring guidelines.",
+                   "Standard start.")
+    return Rec(GREEN, "Standard dosing, titration and monitoring of methadone. CPIC found no evidence to support a "
+                      "slower titration or different ECG monitoring based on CYP2B6; follow ECG monitoring guidelines.",
+               "Standard start.")
 
 
 def tacrolimus(gt: Genotypes) -> Rec:
@@ -511,33 +519,62 @@ def _cyp2c9_as(gt: Genotypes) -> float:
     return 2.0 if s is None else s
 
 
-def nsaid(gt: Genotypes) -> Rec:
-    s = _cyp2c9_as(gt)
-    if s >= 1.5:
-        return _std("Usual CYP2C9 dosing.")
-    if s >= 1.0:
-        return Rec(YELLOW, "Start at the lowest recommended dose; titrate cautiously to effect; use the lowest "
-                           "effective dose for the shortest time.", "Lowest starting dose; titrate cautiously.")
-    return Rec(RED, "Start at 25–50% of the lowest recommended dose with cautious titration, or use an "
-                    "alternative not metabolized by CYP2C9.", "25–50% of lowest dose, or alternative.")
+# CPIC 2020 NSAID guideline, Tables 2-4.
+_NSAID_STD = "Initiate with the recommended starting dose; use the lowest effective dose for the shortest duration."
+_NSAID_ALTS = ("Alternatives not primarily metabolized by CYP2C9 include aspirin, ketorolac, naproxen and sulindac.")
+_NSAID_IND = Rec(GREEN, "CYP2C9 indeterminate: no CPIC recommendation.", "Usual CYP2C9 dosing.")
+
+
+def _nsaid(steady_days: int, ibuprofen: bool = False) -> Callable[[Genotypes], Rec]:
+    """Table 2: celecoxib (steady state ~8 days), flurbiprofen, lornoxicam, ibuprofen (~5 days)."""
+    def rule(gt: Genotypes) -> Rec:
+        if gt.code("CYP2C9") == "IND":
+            return _NSAID_IND
+        s = _cyp2c9_as(gt)
+        caution = (" Use extra caution with ibuprofen in CYP2C9*2 carriers (linked to CYP2C8*3)."
+                   if ibuprofen and gt.has_allele("CYP2C9", "*2") else "")
+        if s >= 1.5:
+            extra = (" Intermediate metabolizers (AS 1.5) may have a higher risk of adverse events, especially with "
+                     "hepatic impairment or advanced age." if s == 1.5 else "")
+            return _std("Usual CYP2C9 dosing.", _NSAID_STD + extra + caution)
+        if s >= 1.0:
+            return Rec(YELLOW, "Initiate with the lowest recommended starting dose; titrate to clinical effect or "
+                               "maximum dose with caution. Monitor blood pressure and kidney function." + caution,
+                       "Lowest starting dose; titrate cautiously.")
+        return Rec(YELLOW, "Initiate with 25–50% of the lowest recommended starting dose; titrate to clinical effect or "
+                           f"25–50% of the maximum dose with caution, not before steady state (at least {steady_days} "
+                           "days). Monitor blood pressure and kidney function. Alternatively, choose a drug not "
+                           "metabolized by CYP2C9. " + _NSAID_ALTS + caution,
+                   "Start 25–50% of lowest dose, or alternative.")
+    return rule
 
 
 def meloxicam(gt: Genotypes) -> Rec:
+    """Table 3."""
+    if gt.code("CYP2C9") == "IND":
+        return _NSAID_IND
     s = _cyp2c9_as(gt)
     if s >= 1.5:
-        return _std("Usual CYP2C9 dosing.")
+        return _std("Usual CYP2C9 dosing.", _NSAID_STD)
     if s >= 1.0:
-        return Rec(YELLOW, "Start at 50% of the lowest recommended dose; titrate cautiously.",
-                   "Start 50% of lowest dose.")
-    return Rec(RED, "Use an alternative not metabolized by CYP2C9 or not prolonged by reduced CYP2C9 "
-                    "function.", "Use an alternative NSAID/analgesic.")
+        return Rec(YELLOW, "Initiate with 50% of the lowest recommended starting dose; titrate to clinical effect or 50% "
+                           "of the maximum dose with caution, not before steady state (at least 7 days). Monitor "
+                           "blood pressure and kidney function. Alternatively, choose an alternative therapy. "
+                           + _NSAID_ALTS, "Start 50% of lowest dose.")
+    return Rec(RED, "Choose an alternative not metabolized by CYP2C9 or not significantly affected by CYP2C9 "
+                    "variants, or an NSAID metabolized by CYP2C9 but with a shorter half-life. " + _NSAID_ALTS,
+               "Use an alternative NSAID/analgesic.")
 
 
 def piroxicam(gt: Genotypes) -> Rec:
+    """Table 4 (piroxicam and tenoxicam)."""
+    if gt.code("CYP2C9") == "IND":
+        return _NSAID_IND
     s = _cyp2c9_as(gt)
     if s >= 1.5:
-        return _std("Usual CYP2C9 dosing.")
-    return Rec(RED, "Use an alternative not metabolized by CYP2C9 or with a shorter half-life.",
+        return _std("Usual CYP2C9 dosing.", _NSAID_STD)
+    return Rec(RED, "Choose an alternative not metabolized by CYP2C9 or not significantly affected by CYP2C9 "
+                    "variants, or an NSAID metabolized by CYP2C9 but with a shorter half-life. " + _NSAID_ALTS,
                "Use an alternative NSAID/analgesic.")
 
 
@@ -600,14 +637,20 @@ def allopurinol(gt: Genotypes) -> Rec:
 # --------------------------------------------------------------------------- NAT2
 
 def hydralazine(gt: Genotypes) -> Rec:
+    """CPIC 2025, Table 2 (oral, adults with resistant hypertension). NAT2 'normal' is the rapid phenotype."""
     c = gt.code("NAT2")
     if c == "PM":
-        return Rec(YELLOW, "Start 40–75 mg/day total; titrate carefully to effect; use caution at ≥200 mg/day "
-                           "(drug-induced lupus risk).", "Resistant HTN: start 40–75 mg/day; caution ≥200.")
-    if c == "NM":
-        return _std("Standard start; may need higher dose.",
-                    "Standard dosing; rapid acetylators may need higher doses for effect.")
-    return _std()
+        return Rec(YELLOW, "Resistant hypertension: initiate at a total daily dose of 40–75 mg; titrate carefully to "
+                           "clinical effect or guideline-recommended dose; use caution at total daily doses of "
+                           "200 mg or more (drug-induced lupus risk).",
+                   "Resistant HTN: start 40–75 mg/day; caution ≥200.")
+    if c in ("IM", "RM", "NM"):
+        return Rec(YELLOW, "Resistant hypertension: consider a starting total daily dose of at least 75 mg and titrate "
+                           "up to 300 mg/day as tolerated; rapid and intermediate acetylators typically need a 50–100% "
+                           "higher maintenance dose than poor acetylators. Avoid twice-daily dosing; three or four "
+                           "times daily is preferred.",
+                   "Resistant HTN: start ≥75 mg/day; up to 300.")
+    return Rec(GREEN, "NAT2 indeterminate: no CPIC recommendation.", "No CPIC recommendation.")
 
 
 def _nat2_literature(slow_tier: str, text: str, short: str, note: str = "") -> Callable[[Genotypes], Rec]:
@@ -731,7 +774,7 @@ C, P, G, Y, N, I, O, X = CATEGORIES
 DRUGS: list[Drug] = [
     # Cardiology & Lipids
     Drug("Clopidogrel", C, ("CYP2C19",), clopidogrel, source="CPIC 2022"),
-    Drug("Metoprolol", C, ("CYP2D6",), metoprolol),
+    Drug("Metoprolol", C, ("CYP2D6",), metoprolol, source="CPIC 2024"),
     Drug("Simvastatin", C, ("SLCO1B1",), simvastatin),
     Drug("Lovastatin", C, ("SLCO1B1",), lovastatin),
     Drug("Atorvastatin", C, ("SLCO1B1",), atorvastatin),
@@ -740,7 +783,7 @@ DRUGS: list[Drug] = [
     Drug("Pravastatin", C, ("SLCO1B1",), pravastatin),
     Drug("Fluvastatin", C, ("SLCO1B1", "CYP2C9"), fluvastatin),
     Drug("Warfarin", C, ("CYP2C9", "VKORC1", "CYP4F2"), warfarin),
-    Drug("Hydralazine", C, ("NAT2",), hydralazine),
+    Drug("Hydralazine", C, ("NAT2",), hydralazine, source="CPIC 2025"),
     Drug("Procainamide", C, ("NAT2",), _nat2_literature(
         RED, "Higher exposure and drug-induced lupus risk in slow acetylators.",
         "Higher exposure and lupus risk."), source="Literature"),
@@ -752,17 +795,17 @@ DRUGS: list[Drug] = [
     Drug("Morphine", P, ("CYP2D6",), no_cyp2d6_change, source="CPIC 2021"),
     Drug("Hydromorphone", P, ("CYP2D6",), no_cyp2d6_change, source="CPIC 2021"),
     Drug("Fentanyl", P, ("CYP2D6",), no_cyp2d6_change, source="CPIC 2021"),
-    Drug("Methadone", P, ("CYP2B6",), methadone, source="Literature"),
+    Drug("Methadone", P, ("CYP2B6",), methadone, source="CPIC 2024"),
     Drug("Midazolam", P, ("CYP3A5",), midazolam, source="Literature"),
-    Drug("Ondansetron", P, ("CYP2D6",), antiemetic_5ht3),
-    Drug("Tropisetron", P, ("CYP2D6",), antiemetic_5ht3),
-    Drug("Celecoxib", P, ("CYP2C9",), nsaid),
-    Drug("Flurbiprofen", P, ("CYP2C9",), nsaid),
-    Drug("Ibuprofen", P, ("CYP2C9",), nsaid),
-    Drug("Lornoxicam", P, ("CYP2C9",), nsaid),
-    Drug("Meloxicam", P, ("CYP2C9",), meloxicam),
-    Drug("Piroxicam", P, ("CYP2C9",), piroxicam),
-    Drug("Tenoxicam", P, ("CYP2C9",), piroxicam),
+    Drug("Ondansetron", P, ("CYP2D6",), antiemetic_5ht3, source="CPIC 2026"),
+    Drug("Tropisetron", P, ("CYP2D6",), antiemetic_5ht3, source="CPIC 2026"),
+    Drug("Celecoxib", P, ("CYP2C9",), _nsaid(8), source="CPIC 2020"),
+    Drug("Flurbiprofen", P, ("CYP2C9",), _nsaid(5), source="CPIC 2020"),
+    Drug("Ibuprofen", P, ("CYP2C9",), _nsaid(5, ibuprofen=True), source="CPIC 2020"),
+    Drug("Lornoxicam", P, ("CYP2C9",), _nsaid(5), source="CPIC 2020"),
+    Drug("Meloxicam", P, ("CYP2C9",), meloxicam, source="CPIC 2020"),
+    Drug("Piroxicam", P, ("CYP2C9",), piroxicam, source="CPIC 2020"),
+    Drug("Tenoxicam", P, ("CYP2C9",), piroxicam, source="CPIC 2020"),
     # Gastrointestinal
     Drug("Omeprazole", G, ("CYP2C19",), ppi),
     Drug("Lansoprazole", G, ("CYP2C19",), ppi),

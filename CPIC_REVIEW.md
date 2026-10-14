@@ -23,12 +23,16 @@ A checked drug shows the guideline year in its source (e.g. "CPIC 2019") on ever
 | G6PD (expanded), 2023, Table 2 | dapsone | G6PD is not on the Quest panel. Dapsone's NAT2 rule (Literature) is unchanged, but its text now notes CPIC rates dapsone high risk in G6PD deficiency and to confirm G6PD status. | 2026-10-14 |
 | RYR1/CACNA1S & volatile anesthetics/succinylcholine, 2019 | — | Not applicable: genes not on the Quest panel; drugs not in the program. | 2026-10-14 |
 | MT-RNR1 & aminoglycosides (gentamicin) | — | Not applicable: gene not on the Quest panel; drug not in the program. | 2026-10-14 |
+| NAT2 & hydralazine, **2025** (new guideline), Table 2 | hydralazine | **Changed.** Poor acetylators unchanged (40–75 mg/day start, caution ≥200 mg/day). Rapid/intermediate acetylators now **yellow**: CPIC calls every phenotype actionable — start ≥75 mg/day, titrate to 300 mg/day, expect 50–100% higher maintenance dose, avoid twice-daily dosing. Indeterminate → no recommendation. Applies to resistant hypertension in adults. | 2026-10-14 |
+| CYP2B6 & methadone, **2024** (new guideline), Table 2 | methadone | **Changed.** Was a Literature rule that made poor metabolizers yellow ("start low"). CPIC 2024: standard dosing, titration and monitoring for RM/NM/IM/PM; no evidence for slower titration or different ECG monitoring; UM/indeterminate → no recommendation. Now green, source CPIC 2024. | 2026-10-14 |
+| CYP2D6 & beta-blockers, **2024**, Table 2 | metoprolol | Tiers matched (PM yellow; NM/IM standard). UM now "no recommendation" (was "may need higher dose"). Added: if already stable on metoprolol, a change is probably unnecessary. | 2026-10-14 |
+| CYP2C9 & NSAIDs, 2020, Tables 2–4 | celecoxib, flurbiprofen, ibuprofen, lornoxicam, meloxicam, piroxicam, tenoxicam | **Changed.** Celecoxib-group poor metabolizers now **yellow** (was red): CPIC's primary recommendation is 25–50% of the lowest starting dose, titrated only after steady state (8 days celecoxib, 5 days others), with an alternative as the second option. Meloxicam PM and piroxicam/tenoxicam AS ≤1 remain red (alternative). Added ibuprofen/CYP2C9\*2 caution, alternative drugs, and indeterminate → no recommendation. | 2026-10-14 |
+| CYP2D6 & 5-HT3 antagonists, **2026 update**, Table 2 | ondansetron, tropisetron | Tiers matched (UM → granisetron; others standard). IM/PM/indeterminate now say "no recommendation (insufficient evidence)". Applies to adults and children. | 2026-10-14 |
 
 ## Not yet checked
 
-PPIs, voriconazole (CYP2C19); SSRIs/SNRIs (CYP2D6, CYP2C19, CYP2B6); ondansetron/tropisetron;
-tamoxifen; beta-blockers (metoprolol); statins (SLCO1B1, ABCG2, CYP2C9); warfarin; NSAIDs; phenytoin;
-tacrolimus; hydralazine (NAT2).
+PPIs, voriconazole (CYP2C19); SSRIs/SNRIs (CYP2D6, CYP2C19, CYP2B6); tamoxifen; statins (SLCO1B1,
+ABCG2, CYP2C9); warfarin; phenytoin; tacrolimus.
 
 Non-CPIC rules (Literature / FDA label / DPWG): procainamide, isoniazid, dapsone, sulfasalazine,
-amifampridine, methadone, midazolam, irinotecan, estrogen-containing therapy.
+amifampridine, midazolam, irinotecan, estrogen-containing therapy.

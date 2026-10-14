@@ -207,3 +207,18 @@ def test_dpyd_cpic_2017(report):
 def test_efavirenz_and_dapsone(report):
     assert "400 or 200 mg/day" in _rec(report, "Efavirenz", CYP2B6=("*6/*6", "Poor Metabolizer")).text
     assert "G6PD" in _rec(report, "Dapsone").text
+
+
+def test_batch4_cpic(report):
+    hyd_im = _rec(report, "Hydralazine", NAT2=("*4/*5", "Intermediate Metabolizer"))
+    assert hyd_im.tier == YELLOW and "at least 75 mg" in hyd_im.text
+    assert "40–75 mg" in _rec(report, "Hydralazine").text  # sample NAT2 poor
+    assert _rec(report, "Methadone", CYP2B6=("*6/*6", "Poor Metabolizer")).tier == GREEN
+    assert "No CPIC recommendation" in _rec(report, "Metoprolol", CYP2D6=("*1/*1xN", "Ultra-Rapid Metabolizer")).text
+    ond_pm = _rec(report, "Ondansetron", CYP2D6=("*4/*4", "Poor Metabolizer"))
+    assert ond_pm.tier == GREEN and "No CPIC recommendation" in ond_pm.text
+    cel_pm = _rec(report, "Celecoxib", CYP2C9=("*3/*3", "Poor Metabolizer"))
+    assert cel_pm.tier == YELLOW and "8 days" in cel_pm.text
+    assert _rec(report, "Meloxicam", CYP2C9=("*3/*3", "Poor Metabolizer")).tier == RED
+    assert _rec(report, "Piroxicam", CYP2C9=("*1/*3", "Intermediate Metabolizer")).tier == RED
+    assert "CYP2C8*3" in _rec(report, "Ibuprofen", CYP2C9=("*1/*2", "Intermediate Metabolizer")).text
