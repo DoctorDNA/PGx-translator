@@ -187,6 +187,13 @@ class Genotypes:
         g = self.genes.get(name)
         return g.code if g else None
 
+    def has_allele(self, name: str, allele: str) -> bool:
+        """True if the reported genotype contains this star allele (e.g. CYP2D6 '*10')."""
+        g = self.genes.get(name)
+        if not g:
+            return False
+        return any(a.split(".")[0] == allele for a in re.findall(r"\*[\w.]+?(?=x|/|$|\s)", g.genotype))
+
     def score(self, name: str) -> Optional[float]:
         g = self.genes.get(name)
         return g.activity_score if g else None

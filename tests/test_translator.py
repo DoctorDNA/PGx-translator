@@ -65,7 +65,7 @@ def test_sample_tiers_match_reference(report):
         "Voriconazole": RED, "Citalopram": RED, "Amitriptyline": RED, "Simvastatin": RED, "Lovastatin": RED,
         "Omeprazole": YELLOW, "Hydralazine": YELLOW, "Efavirenz": YELLOW, "Paroxetine": YELLOW,
         "Tramadol": YELLOW, "Codeine": YELLOW, "Hydrocodone": YELLOW, "Tamoxifen": YELLOW,
-        "Atomoxetine": YELLOW, "Nortriptyline": YELLOW, "Atorvastatin": YELLOW, "Rosuvastatin": YELLOW,
+        "Atomoxetine": GREEN, "Nortriptyline": YELLOW, "Atorvastatin": YELLOW, "Rosuvastatin": YELLOW,
         "Pitavastatin": YELLOW, "Warfarin": YELLOW,
         "Clopidogrel": GREEN, "Sertraline": GREEN, "Metoprolol": GREEN, "Tacrolimus": GREEN,
         "Fluorouracil": GREEN, "Azathioprine": GREEN, "Carbamazepine": GREEN, "Allopurinol": GREEN,
@@ -139,3 +139,27 @@ def test_full_report_links(report, tmp_path):
     pdf_path = render_full_pdf(s, tmp_path / "r.pdf")
     data = pdf_path.read_bytes()
     assert data.count(b"/Subtype /Link") >= 40
+
+
+def test_atomoxetine_cpic_2019(report):
+    """AS 1.0 without *10 is dosed like a normal metabolizer; *10 or AS 0.5 gets the slow schedule."""
+    def rec(geno, pheno):
+        r = with_genes(report, CYP2D6=(geno, pheno))
+        return next(x.rec for x in build_summary(r).results if x.drug.name == "Atomoxetine")
+    assert rec("*1/*5", "Intermediate Metabolizer").tier == GREEN
+    slow = rec("*10/*41", "Intermediate Metabolizer")
+    assert slow.tier == YELLOW and "after 2 weeks, increase to 80 mg/day" in slow.text
+    assert rec("*4/*41", "Intermediate Metabolizer").tier == YELLOW
+    assert rec("*4/*4", "Poor Metabolizer").tier == YELLOW
+    assert rec("*1/*1", "Normal Metabolizer").tier == GREEN
+
+
+def test_tca_cpic_2016(report):
+    def rec(drug, **genes):
+        r = with_genes(report, **genes)
+        return next(x.rec for x in build_summary(r).results if x.drug.name == drug)
+    pm = rec("Amitriptyline", CYP2D6=("*4/*4", "Poor Metabolizer"), CYP2C19=("*1/*1", "Normal Metabolizer"))
+    assert pm.tier == RED and "50% reduction" in pm.text and "neuropathic pain" in pm.text
+    assert rec("Amitriptyline", CYP2D6=("*1/*1", "Normal Metabolizer"),
+               CYP2C19=("*1/*2", "Intermediate Metabolizer")).tier == GREEN
+    assert "higher target dose" in rec("Nortriptyline", CYP2D6=("*1/*1xN", "Ultra-Rapid Metabolizer")).text

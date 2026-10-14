@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .rules import RULES_REVIEWED, RULES_VERSION
+from .rules import RULES_VERSION
 from .summary import Summary
 
 HOW_TO_READ = [
@@ -64,8 +64,10 @@ def interpretation_notes(summary: Summary) -> list[str]:
         "Several CYP2C9 recommendations depend on activity score (1.0 vs 1.5), which may not appear on "
         "the lab report.",
         "Only the alleles tested by the laboratory were assessed; untested variants default to normal (*1).",
-        f"Recommendations are from the Morpheus PGx rules table v{RULES_VERSION}, reviewed against CPIC on "
-        f"{RULES_REVIEWED}. Confirm current guidance before prescribing decisions.",
+        f"Recommendations are from the Morpheus PGx rules table v{RULES_VERSION}. Sources showing a year "
+        "(e.g., \"CPIC 2019\") were checked against that published CPIC guideline; \"CPIC\" alone means based "
+        "on CPIC guidance but not yet checked against the published tables. Confirm current guidance before "
+        "prescribing decisions.",
         f"Source: {r.lab}{', ' + r.test_name if r.test_name else ''}, specimen "
         f"{r.specimen or 'Not provided'}{', reporting ID ' + r.reporting_id if r.reporting_id else ''}.",
     ]

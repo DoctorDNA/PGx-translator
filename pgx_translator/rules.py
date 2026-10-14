@@ -8,8 +8,9 @@ returns a Rec with:
 * short - condensed phrase for the one-page summary
 
 Recommendations follow CPIC guidelines (cpicpgx.org) unless ``source`` says
-otherwise. This table is clinical decision support only; review it against current
-CPIC guidance before relying on it and update RULES_VERSION when you change it.
+otherwise. A source with a year (e.g. "CPIC 2019") means the rule was checked against that
+published guideline; see CPIC_REVIEW.md for the review log. This table is clinical decision
+support only; update RULES_VERSION and CPIC_REVIEW.md when you change it.
 """
 
 from __future__ import annotations
@@ -19,8 +20,7 @@ from typing import Callable, Optional
 
 from .phenotypes import GREEN, RED, YELLOW, Genotypes
 
-RULES_VERSION = "2.0"
-RULES_REVIEWED = "2026-09-27"
+RULES_VERSION = "2.1"
 
 CATEGORIES = [
     "Cardiology & Lipids",
@@ -131,19 +131,35 @@ def sertraline(gt: Genotypes) -> Rec:
                 "Standard starting dose; if response is inadequate, titrate higher or switch.")
 
 
+# CPIC TCA guideline (2016 update, Tables 2-4) covers depression-range doses only.
+TCA_DOSE_SCOPE = (" Applies to depression-range doses; CPIC recommends no dose change for intermediate or "
+                  "poor metabolizers on low doses (e.g., neuropathic pain).")
+
+
 def tertiary_tca(gt: Genotypes) -> Rec:
     c19, d6 = gt.code("CYP2C19"), gt.code("CYP2D6")
-    if d6 in ("UM", "PM"):
-        return Rec(RED, "Avoid tricyclics (CYP2D6 " + ("ultrarapid" if d6 == "UM" else "poor") +
-                   " metabolizer); select a drug not metabolized by CYP2D6. If a TCA is required, "
-                   "use therapeutic drug monitoring.",
+    if d6 == "UM":
+        return Rec(RED, "Avoid tricyclics (CYP2D6 ultrarapid metabolizer: likely lack of efficacy); select a "
+                        "drug not metabolized by CYP2D6. If a TCA is warranted, titrate to a higher target dose "
+                        "with therapeutic drug monitoring." + TCA_DOSE_SCOPE,
+                   "Avoid TCAs; choose a non-CYP2D6 alternative.")
+    if d6 == "PM":
+        return Rec(RED, "Avoid tricyclics (CYP2D6 poor metabolizer: side-effect risk); select a drug not "
+                        "metabolized by CYP2D6. If a TCA is warranted, consider a 50% reduction of the starting "
+                        "dose with therapeutic drug monitoring." + TCA_DOSE_SCOPE,
                    "Avoid TCAs; choose a non-CYP2D6 alternative.")
     if c19 in ("UM", "RM", "PM"):
         tail = " (reduce 25%, with drug levels)" if d6 == "IM" else ""
-        return Rec(RED, "Avoid; if a TCA is needed, use nortriptyline or desipramine" + tail + ".",
+        alt = "Avoid; if a TCA is needed, use nortriptyline or desipramine" + tail + "."
+        if c19 == "PM" and d6 == "NM":
+            alt += (" If a tertiary amine is warranted, consider a 50% reduction of the starting dose with "
+                    "therapeutic drug monitoring.")
+        elif c19 in ("UM", "RM"):
+            alt += " If a tertiary amine is warranted, use therapeutic drug monitoring."
+        return Rec(RED, alt + TCA_DOSE_SCOPE,
                    "Avoid tertiary TCAs if possible; use drug levels if needed.")
     if d6 == "IM":
-        return Rec(YELLOW, "Consider 25% dose reduction; use therapeutic drug monitoring.",
+        return Rec(YELLOW, "Consider 25% dose reduction; use therapeutic drug monitoring." + TCA_DOSE_SCOPE,
                    "Consider ~25% lower dose; drug levels.")
     return _std("Standard start; drug levels if needed.")
 
@@ -223,31 +239,36 @@ def antiemetic_5ht3(gt: Genotypes) -> Rec:
 
 
 def atomoxetine(gt: Genotypes) -> Rec:
-    c = gt.code("CYP2D6")
-    if c == "IM":
-        return Rec(YELLOW, "Start 40 mg/day, increase to 80 mg/day after 3 days; consider 100 mg/day at "
-                           "2 weeks if needed and tolerated.",
-                   "Standard start; titrate to response; level if needed.")
-    if c == "PM":
-        return Rec(YELLOW, "Start 40 mg/day; if no response and no adverse effects after 2 weeks, increase "
-                           "to 80 mg/day; consider a drug level.",
-                   "Start 40 mg/day; slower titration; level if needed.")
-    if c == "UM":
-        return _std("Standard start; may need higher dose; level if no response.",
-                    "Standard starting dose; if no response, titrate higher and consider a drug level.")
+    """CPIC 2019, Table 3 (adults). Activity score 1.0 is split by whether CYP2D6*10 is present."""
+    c, s = gt.code("CYP2D6"), gt.score("CYP2D6")
+    child = " Children: weight-based dosing per CPIC Table 2."
+    standard = ("Adults: start 40 mg/day and increase to 80 mg/day after 3 days; if no response and no adverse "
+                "effects after 2 weeks, consider 100 mg/day. If still no response after 2 weeks, consider a peak "
+                "plasma level (1–2 h post-dose).")
+    slow = ("Adults: start 40 mg/day; if no response and no adverse effects after 2 weeks, increase to "
+            "80 mg/day. If response is inadequate after 2 more weeks, consider a plasma level (2–4 h post-dose). "
+            "Reduce the dose if side effects occur.")
+    if c == "UM" or c == "NM" or (s is not None and s >= 1.0 and not gt.has_allele("CYP2D6", "*10")):
+        if c == "UM":
+            standard += " Ultrarapid metabolizers may need >100 mg/day."
+        return Rec(GREEN, standard + child, "Standard start; titrate to response; level if needed.")
+    if c in ("IM", "PM") or s is not None:
+        return Rec(YELLOW, slow + child, "Start 40 mg/day; 80 mg only after 2 weeks; level if needed.")
     return _std()
 
 
 def nortriptyline(gt: Genotypes) -> Rec:
     c = gt.code("CYP2D6")
     if c == "UM":
-        return Rec(RED, "Avoid; select a drug not metabolized by CYP2D6. If a TCA is required, titrate "
-                        "with therapeutic drug monitoring.", "Avoid; low levels likely.")
+        return Rec(RED, "Avoid; select a drug not metabolized by CYP2D6. If a TCA is warranted, titrate to a "
+                        "higher target dose with therapeutic drug monitoring." + TCA_DOSE_SCOPE,
+                   "Avoid; low levels likely.")
     if c == "PM":
-        return Rec(RED, "Avoid; if a TCA is required, use 50% of the usual starting dose with therapeutic "
-                        "drug monitoring.", "Avoid; if needed, 50% dose with levels.")
+        return Rec(RED, "Avoid; select a drug not metabolized by CYP2D6. If a TCA is warranted, consider a 50% "
+                        "reduction of the starting dose with therapeutic drug monitoring." + TCA_DOSE_SCOPE,
+                   "Avoid; if needed, 50% dose with levels.")
     if c == "IM":
-        return Rec(YELLOW, "Consider 25% dose reduction; use therapeutic drug monitoring.",
+        return Rec(YELLOW, "Consider 25% dose reduction; use therapeutic drug monitoring." + TCA_DOSE_SCOPE,
                    "Consider ~25% lower depression dose; drug levels.")
     return _std()
 
@@ -597,9 +618,12 @@ def thiopurine(gt: Genotypes) -> Rec:
 
 def atazanavir(gt: Genotypes) -> Rec:
     if gt.code("UGT1A1") == "PM":
-        return Rec(RED, "High likelihood of jaundice-related discontinuation; consider an alternative.",
-                   "Jaundice likely; consider alternative.")
-    return _std("Usual start; monitor clinically.", "No genetic reason to avoid.")
+        return Rec(RED, "Consider an alternative, particularly where jaundice would concern the patient. If "
+                        "atazanavir is used, jaundice is likely: at least 20% (up to 60%) of poor metabolizers stop "
+                        "it for that reason.", "Jaundice likely; consider alternative.")
+    return _std("Usual start; monitor clinically.",
+                "No need to avoid based on UGT1A1. Jaundice-related discontinuation is unlikely (less than about "
+                "1 in 20); tell the patient this.")
 
 
 def irinotecan(gt: Genotypes) -> Rec:
@@ -678,19 +702,19 @@ DRUGS: list[Drug] = [
     Drug("Citalopram", Y, ("CYP2C19",), citalopram),
     Drug("Escitalopram", Y, ("CYP2C19",), citalopram),
     Drug("Sertraline", Y, ("CYP2C19", "CYP2B6"), sertraline),
-    Drug("Amitriptyline", Y, ("CYP2C19", "CYP2D6"), tertiary_tca),
-    Drug("Clomipramine", Y, ("CYP2C19", "CYP2D6"), tertiary_tca),
-    Drug("Doxepin", Y, ("CYP2C19", "CYP2D6"), tertiary_tca),
-    Drug("Imipramine", Y, ("CYP2C19", "CYP2D6"), tertiary_tca),
-    Drug("Trimipramine", Y, ("CYP2C19", "CYP2D6"), tertiary_tca),
-    Drug("Nortriptyline", Y, ("CYP2D6",), nortriptyline),
-    Drug("Desipramine", Y, ("CYP2D6",), nortriptyline),
+    Drug("Amitriptyline", Y, ("CYP2C19", "CYP2D6"), tertiary_tca, source="CPIC 2016"),
+    Drug("Clomipramine", Y, ("CYP2C19", "CYP2D6"), tertiary_tca, source="CPIC 2016"),
+    Drug("Doxepin", Y, ("CYP2C19", "CYP2D6"), tertiary_tca, source="CPIC 2016"),
+    Drug("Imipramine", Y, ("CYP2C19", "CYP2D6"), tertiary_tca, source="CPIC 2016"),
+    Drug("Trimipramine", Y, ("CYP2C19", "CYP2D6"), tertiary_tca, source="CPIC 2016"),
+    Drug("Nortriptyline", Y, ("CYP2D6",), nortriptyline, source="CPIC 2016"),
+    Drug("Desipramine", Y, ("CYP2D6",), nortriptyline, source="CPIC 2016"),
     Drug("Paroxetine", Y, ("CYP2D6",), paroxetine),
     Drug("Fluvoxamine", Y, ("CYP2D6",), fluvoxamine),
     Drug("Vortioxetine", Y, ("CYP2D6",), vortioxetine),
     Drug("Venlafaxine", Y, ("CYP2D6",), venlafaxine),
     Drug("Fluoxetine", Y, ("CYP2D6",), fluoxetine),
-    Drug("Atomoxetine", Y, ("CYP2D6",), atomoxetine),
+    Drug("Atomoxetine", Y, ("CYP2D6",), atomoxetine, source="CPIC 2019"),
     # Neurology
     Drug("Phenytoin", N, ("CYP2C9", "HLA-B*15:02"), phenytoin),
     Drug("Fosphenytoin", N, ("CYP2C9", "HLA-B*15:02"), phenytoin),
@@ -706,8 +730,8 @@ DRUGS: list[Drug] = [
     Drug("Dapsone", I, ("NAT2",), _nat2_literature(
         YELLOW, "Higher adverse-effect risk in slow acetylators.", "Higher adverse-effect risk."),
          source="Literature"),
-    Drug("Atazanavir", I, ("UGT1A1",), atazanavir),
-    Drug("Abacavir", I, ("HLA-B*57:01",), abacavir),
+    Drug("Atazanavir", I, ("UGT1A1",), atazanavir, source="CPIC 2015"),
+    Drug("Abacavir", I, ("HLA-B*57:01",), abacavir, source="CPIC 2012/2014"),
     Drug("Peginterferon alfa", I, ("IFNL3",), ifnl3),
     Drug("Ribavirin", I, ("IFNL3",), ifnl3),
     # Oncology, Immunology & Transplant
@@ -721,7 +745,7 @@ DRUGS: list[Drug] = [
     Drug("Thioguanine", O, ("TPMT", "NUDT15"), thiopurine),
     Drug("Irinotecan", O, ("UGT1A1",), irinotecan, source="FDA/DPWG"),
     # Other
-    Drug("Allopurinol", X, ("HLA-B*58:01",), allopurinol),
+    Drug("Allopurinol", X, ("HLA-B*58:01",), allopurinol, source="CPIC 2013/2015"),
     Drug("Estrogen-containing therapy", X, ("F5",), estrogen, source="Literature"),
 ]
 
