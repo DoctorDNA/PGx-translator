@@ -18,12 +18,17 @@ A checked drug shows the guideline year in its source (e.g. "CPIC 2019") on ever
 | CYP2C19 & clopidogrel, 2022 update, Tables 2–3 | clopidogrel | Tiers matched. **Safety wording fixed:** the program previously suggested prasugrel for neurovascular indications; CPIC notes prasugrel is contraindicated after stroke/TIA (ticagrelor suggested instead). Split IM (avoid 75 mg for ACS/PCI; no recommendation for other CV indications) from PM (avoid clopidogrel if possible). | 2026-10-14 |
 | CYP2D6 & opioids, 2021, Tables 2–4 | codeine, tramadol, hydrocodone; oxycodone, morphine, hydromorphone, fentanyl | Tiers matched. Codeine alternatives now "non-tramadol opioid" and tramadol "non-codeine opioid" as in CPIC; CYP2D6 indeterminate → no recommendation; hydrocodone UM → no recommendation. Oxycodone/morphine/hydromorphone/fentanyl: CPIC reviewed, no CYP2D6 recommendation. | 2026-10-14 |
 | CFTR & ivacaftor | — | Not applicable: CFTR is not on the Quest panel and ivacaftor is not in the program. | 2026-10-14 |
+| CYP2B6 & efavirenz, 2019, Table 2 | efavirenz | Tiers and doses matched (IM 400 mg; PM 400 or 200 mg; others 600 mg). Added CPIC notes on drug-level monitoring and pill burden. Applies to adults and children ≥40 kg. | 2026-10-14 |
+| DPYD & fluoropyrimidines, 2017 update, Table 2 | fluorouracil, capecitabine, tegafur | **Changed.** Activity score 1.5 now "reduce by 25% to 50%" (was 50%); AS 1.0 stays 50%. AS 0.5: avoid, or <25% dose with early drug monitoring if no alternative; AS 0: avoid (the strongly-reduced-dose option no longer offered). Added CPIC's titration guidance; tegafur flagged as limited evidence. | 2026-10-14 |
+| G6PD (expanded), 2023, Table 2 | dapsone | G6PD is not on the Quest panel. Dapsone's NAT2 rule (Literature) is unchanged, but its text now notes CPIC rates dapsone high risk in G6PD deficiency and to confirm G6PD status. | 2026-10-14 |
+| RYR1/CACNA1S & volatile anesthetics/succinylcholine, 2019 | — | Not applicable: genes not on the Quest panel; drugs not in the program. | 2026-10-14 |
+| MT-RNR1 & aminoglycosides (gentamicin) | — | Not applicable: gene not on the Quest panel; drug not in the program. | 2026-10-14 |
 
 ## Not yet checked
 
 PPIs, voriconazole (CYP2C19); SSRIs/SNRIs (CYP2D6, CYP2C19, CYP2B6); ondansetron/tropisetron;
 tamoxifen; beta-blockers (metoprolol); statins (SLCO1B1, ABCG2, CYP2C9); warfarin; NSAIDs; phenytoin;
-efavirenz; tacrolimus; fluoropyrimidines (DPYD); hydralazine (NAT2).
+tacrolimus; hydralazine (NAT2).
 
 Non-CPIC rules (Literature / FDA label / DPWG): procainamide, isoniazid, dapsone, sulfasalazine,
 amifampridine, methadone, midazolam, irinotecan, estrogen-containing therapy.

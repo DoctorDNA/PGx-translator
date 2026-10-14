@@ -193,3 +193,17 @@ def test_opioids_cpic_2021(report):
     assert um.tier == RED and "non-tramadol opioid" in um.text
     assert "non-codeine opioid" in _rec(report, "Tramadol", CYP2D6=("*4/*4", "Poor Metabolizer")).text
     assert _rec(report, "Hydrocodone", CYP2D6=("*1/*1xN", "Ultra-Rapid Metabolizer")).tier == GREEN
+
+
+def test_dpyd_cpic_2017(report):
+    as15 = _rec(report, "Capecitabine", DPYD=("c.2846A>T (A/T)", "Intermediate Metabolizer (Activity Score; 1.5)"))
+    assert as15.tier == YELLOW and "25% to 50%" in as15.text
+    as1 = _rec(report, "Fluorouracil", DPYD=("c.1905+1G>A (G/A)", "Intermediate Metabolizer (Activity Score; 1.0)"))
+    assert "by 50%" in as1.text
+    as0 = _rec(report, "Fluorouracil", DPYD=("c.1905+1G>A (A/A)", "Poor Metabolizer (Activity Score; 0.0)"))
+    assert as0.tier == RED and "strongly reduced" not in as0.text
+
+
+def test_efavirenz_and_dapsone(report):
+    assert "400 or 200 mg/day" in _rec(report, "Efavirenz", CYP2B6=("*6/*6", "Poor Metabolizer")).text
+    assert "G6PD" in _rec(report, "Dapsone").text

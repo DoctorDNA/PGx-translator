@@ -365,14 +365,18 @@ def tamoxifen(gt: Genotypes) -> Rec:
 # --------------------------------------------------------------------------- CYP2B6 / CYP3A
 
 def efavirenz(gt: Genotypes) -> Rec:
+    """CPIC 2019, Table 2 (adults and children >=40 kg)."""
     c = gt.code("CYP2B6")
+    tdm = (" If drug levels are available, check plasma concentrations (target ~1–4 µg/mL). A lower dose may "
+           "need more than one pill a day in multidrug regimens.")
     if c == "IM":
-        return Rec(YELLOW, "Consider starting at 400 mg/day instead of 600 mg.",
+        return Rec(YELLOW, "Consider initiating at 400 mg/day instead of 600 mg (higher CNS adverse-event risk)." + tdm,
                    "Consider 400 instead of 600 mg/day.")
     if c == "PM":
-        return Rec(YELLOW, "Consider starting at 400 or 200 mg/day instead of 600 mg; monitor for CNS effects.",
+        return Rec(YELLOW, "Consider initiating at 400 or 200 mg/day instead of 600 mg (significantly higher CNS "
+                           "adverse-event and discontinuation risk)." + tdm,
                    "Consider 400 or 200 mg/day instead of 600.")
-    return _std("Standard 600 mg/day.")
+    return _std("Standard 600 mg/day.", "Initiate with standard dosing (600 mg/day).")
 
 
 def methadone(gt: Genotypes) -> Rec:
@@ -606,12 +610,17 @@ def hydralazine(gt: Genotypes) -> Rec:
     return _std()
 
 
-def _nat2_literature(slow_tier: str, text: str, short: str) -> Callable[[Genotypes], Rec]:
+def _nat2_literature(slow_tier: str, text: str, short: str, note: str = "") -> Callable[[Genotypes], Rec]:
     def rule(gt: Genotypes) -> Rec:
         if gt.code("NAT2") == "PM":
-            return Rec(slow_tier, text, short)
-        return _std("Standard dosing.", "No acetylator-based change.")
+            return Rec(slow_tier, text + note, short)
+        return _std("Standard dosing.", "No acetylator-based change." + note)
     return rule
+
+
+# CPIC 2023 G6PD guideline, Table 2: dapsone is high risk (strong) in G6PD deficiency. G6PD is not on the Quest panel.
+G6PD_DAPSONE = (" G6PD is not tested on this panel: CPIC (2023) rates dapsone high risk for hemolysis in G6PD "
+                "deficiency, so confirm G6PD status before use.")
 
 
 def amifampridine(gt: Genotypes) -> Rec:
@@ -622,16 +631,33 @@ def amifampridine(gt: Genotypes) -> Rec:
 
 # --------------------------------------------------------------------------- other genes
 
-def fluoropyrimidine(gt: Genotypes) -> Rec:
-    s = gt.score("DPYD")
-    s = 2.0 if s is None else s
-    if s >= 2.0:
-        return _std("Standard DPYD starting dose.", "Full standard dose.")
-    if s >= 1.0:
-        return Rec(YELLOW, f"DPYD activity score {s:.1f}: reduce starting dose by 50%, then titrate by "
-                           "toxicity (and drug levels if available).", "Start at 50% dose; titrate by toxicity.")
-    return Rec(RED, f"DPYD activity score {s:.1f}: avoid fluoropyrimidines; if no alternative, use a "
-                    "strongly reduced dose with drug-level monitoring.", "Avoid; severe toxicity risk.")
+def _fluoropyrimidine(tegafur: bool = False) -> Callable[[Genotypes], Rec]:
+    """CPIC 2017 update, Table 2 (5-fluorouracil and capecitabine)."""
+    note = (" Evidence for tegafur is very limited; CPIC's recommendations are for 5-FU and capecitabine."
+            if tegafur else "")
+    titrate = (" Then titrate: increase the dose in later cycles if there is no or tolerable toxicity in the first "
+               "two cycles (or levels are subtherapeutic); decrease it if the starting dose is not tolerated.")
+
+    def rule(gt: Genotypes) -> Rec:
+        s = gt.score("DPYD")
+        s = 2.0 if s is None else s
+        if s >= 2.0:
+            return _std("Standard DPYD starting dose.",
+                        "No indication to change dose based on DPYD genotype; use label-recommended dosing." + note)
+        if s >= 1.5:
+            return Rec(YELLOW, "DPYD activity score 1.5: reduce the starting dose by 25% to 50%." + titrate + note,
+                       "Start at 50–75% dose; titrate by toxicity.")
+        if s >= 1.0:
+            return Rec(YELLOW, "DPYD activity score 1.0: reduce the starting dose by 50%." + titrate + note,
+                       "Start at 50% dose; titrate by toxicity.")
+        if s > 0:
+            return Rec(RED, f"DPYD activity score {s:.1f}: avoid 5-fluorouracil and its prodrugs. If no "
+                            "fluoropyrimidine-free regimen is suitable, use a strongly reduced dose (estimated <25% "
+                            "of normal) with early therapeutic drug monitoring; a DPD phenotyping test is advisable."
+                            + note, "Avoid; severe toxicity risk.")
+        return Rec(RED, "DPYD activity score 0: avoid 5-fluorouracil and 5-fluorouracil prodrug-based regimens." + note,
+                   "Avoid; severe toxicity risk.")
+    return rule
 
 
 def _thiopurine(drug: str) -> Callable[[Genotypes], Rec]:
@@ -772,12 +798,13 @@ DRUGS: list[Drug] = [
     Drug("Amifampridine", N, ("NAT2",), amifampridine, source="FDA label"),
     # Infectious Disease
     Drug("Voriconazole", I, ("CYP2C19",), voriconazole),
-    Drug("Efavirenz", I, ("CYP2B6",), efavirenz),
+    Drug("Efavirenz", I, ("CYP2B6",), efavirenz, source="CPIC 2019"),
     Drug("Isoniazid", I, ("NAT2",), _nat2_literature(
         RED, "Higher hepatotoxicity risk in slow acetylators; consider dose reduction.",
         "Hepatotoxicity risk; consider lower dose."), source="Literature"),
     Drug("Dapsone", I, ("NAT2",), _nat2_literature(
-        YELLOW, "Higher adverse-effect risk in slow acetylators.", "Higher adverse-effect risk."),
+        YELLOW, "Higher adverse-effect risk in slow acetylators.", "Higher adverse-effect risk.",
+        G6PD_DAPSONE),
          source="Literature"),
     Drug("Atazanavir", I, ("UGT1A1",), atazanavir, source="CPIC 2015"),
     Drug("Abacavir", I, ("HLA-B*57:01",), abacavir, source="CPIC 2012/2014"),
@@ -786,9 +813,9 @@ DRUGS: list[Drug] = [
     # Oncology, Immunology & Transplant
     Drug("Tamoxifen", O, ("CYP2D6",), tamoxifen),
     Drug("Tacrolimus", O, ("CYP3A5", "CYP3A4"), tacrolimus),
-    Drug("Fluorouracil", O, ("DPYD",), fluoropyrimidine, short_name="5-FU"),
-    Drug("Capecitabine", O, ("DPYD",), fluoropyrimidine),
-    Drug("Tegafur", O, ("DPYD",), fluoropyrimidine),
+    Drug("Fluorouracil", O, ("DPYD",), _fluoropyrimidine(), source="CPIC 2017", short_name="5-FU"),
+    Drug("Capecitabine", O, ("DPYD",), _fluoropyrimidine(), source="CPIC 2017"),
+    Drug("Tegafur", O, ("DPYD",), _fluoropyrimidine(tegafur=True), source="CPIC 2017"),
     Drug("Azathioprine", O, ("TPMT", "NUDT15"), _thiopurine("azathioprine"), source="CPIC 2025"),
     Drug("Mercaptopurine", O, ("TPMT", "NUDT15"), _thiopurine("mercaptopurine"), source="CPIC 2025"),
     Drug("Thioguanine", O, ("TPMT", "NUDT15"), _thiopurine("thioguanine"), source="CPIC 2025"),
