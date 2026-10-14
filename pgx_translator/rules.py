@@ -99,36 +99,65 @@ def voriconazole(gt: Genotypes) -> Rec:
 
 
 def citalopram(gt: Genotypes) -> Rec:
+    """CPIC 2023 SSRI guideline, Table 3a (citalopram, escitalopram)."""
     c = gt.code("CYP2C19")
     if c == "UM":
-        return Rec(RED, "Consider an alternative not predominantly metabolized by CYP2C19; "
-                        "if used, may need higher maintenance dose.",
+        return Rec(RED, "Consider a clinically appropriate alternative antidepressant not predominantly metabolized by "
+                        "CYP2C19. If citalopram or escitalopram is warranted and efficacy is inadequate at standard "
+                        "maintenance dosing, consider titrating to a higher maintenance dose.",
                    "Prefer an antidepressant less CYP2C19-dependent.")
     if c == "PM":
-        return Rec(RED, "Consider an alternative not predominantly metabolized by CYP2C19; if used, "
-                        "start low, titrate slowly and use about 50% of the usual maintenance dose "
-                        "(citalopram maximum 20 mg/day).",
+        return Rec(RED, "Consider a clinically appropriate alternative antidepressant not predominantly metabolized by "
+                        "CYP2C19. If warranted, consider a lower starting dose, slower titration and a 50% reduction of "
+                        "the standard maintenance dose (FDA: citalopram maximum 20 mg/day in CYP2C19 poor "
+                        "metabolizers because of QT risk).",
                    "Prefer alternative; if used, ~50% dose (citalopram ≤20 mg).")
     if c == "IM":
-        return Rec(YELLOW, "Standard starting dose; consider slower titration and a lower maintenance dose.",
+        return Rec(YELLOW, "Initiate the recommended starting dose; consider a slower titration schedule and a lower "
+                           "maintenance dose than normal metabolizers.",
                    "Standard start; slower titration, lower maintenance.")
     if c == "RM":
         return _std("Standard start; titrate if response inadequate.",
-                    "Standard starting dose; if response is inadequate, titrate higher or switch.")
-    return _std()
+                    "Initiate the recommended starting dose. If the patient does not respond to recommended "
+                    "maintenance dosing, consider a higher maintenance dose or an alternative not predominantly "
+                    "metabolized by CYP2C19.")
+    if c == "IND":
+        return _std("Standard start.", "CYP2C19 indeterminate: no CPIC recommendation.")
+    return _std("Standard start.", "Initiate therapy with the recommended starting dose.")
 
 
 def sertraline(gt: Genotypes) -> Rec:
+    """CPIC 2023 SSRI guideline, Table 5 (CYP2C19 x CYP2B6). Likely phenotypes count as confirmed."""
     c19, b6 = gt.code("CYP2C19"), gt.code("CYP2B6")
-    if c19 == "PM" or b6 == "PM":
-        return Rec(YELLOW, "Consider a lower starting dose, slower titration and about 50% of the usual "
-                           "maintenance dose, or an alternative.",
-                   "Lower start, slower titration; ~50% maintenance.")
-    if c19 == "IM" or (b6 == "IM" and c19 == "NM"):
-        return Rec(YELLOW, "Standard starting dose; consider slower titration and a lower maintenance dose.",
-                   "Standard start; slower titration, lower maintenance.")
-    return _std("Standard start.",
-                "Standard starting dose; if response is inadequate, titrate higher or switch.")
+    c19 = {"RM": "UM"}.get(c19, c19)
+    b6 = {"RM": "UM"}.get(b6, b6)
+    std = Rec(GREEN, "Initiate therapy with the recommended starting dose.", "Standard start.")
+    slow = Rec(YELLOW, "Initiate the recommended starting dose; consider a slower titration schedule and a lower "
+                       "maintenance dose than normal metabolizers.",
+               "Standard start; slower titration, lower maintenance.")
+
+    def lower(pct: int, alt: bool) -> Rec:
+        tail = " or select a clinically appropriate alternative antidepressant." if alt else "."
+        return Rec(YELLOW, f"Consider a lower starting dose, slower titration and a {pct}% reduction of the standard "
+                           "maintenance dose" + tail, f"Lower start, slower titration; ~{pct}% lower maintenance.")
+
+    if c19 == "UM":
+        if b6 == "UM":
+            return Rec(GREEN, "Initiate the recommended starting dose. If the patient does not respond adequately, "
+                              "consider a higher maintenance dose or switching to an antidepressant not predominantly "
+                              "metabolized by CYP2C19 or CYP2B6.", "Standard start.")
+        return std
+    if c19 == "NM":
+        return {"IM": slow, "PM": lower(25, True)}.get(b6, std)
+    if c19 == "IM":
+        return {"UM": std, "PM": lower(50, False)}.get(b6, slow)
+    if c19 == "PM":
+        if b6 == "PM":
+            return Rec(RED, "Select an alternative antidepressant not primarily metabolized by CYP2C19 or CYP2B6.",
+                       "Prefer an alternative antidepressant.")
+        return lower(50, True)
+    # CYP2C19 indeterminate
+    return {"IM": slow, "PM": lower(25, True)}.get(b6, std)
 
 
 # CPIC TCA guideline (2016 update, Tables 2-4) covers depression-range doses only.
@@ -165,24 +194,20 @@ def tertiary_tca(gt: Genotypes) -> Rec:
 
 
 def ppi(gt: Genotypes) -> Rec:
+    """CPIC 2020, Table 2 (omeprazole, lansoprazole, pantoprazole, dexlansoprazole)."""
     c = gt.code("CYP2C19")
     if c == "UM":
-        return Rec(YELLOW, "Increase starting daily dose by 100%, in divided doses; monitor efficacy.",
-                   "Consider 2× starting daily dose; assess response.")
-    if c == "RM":
-        return Rec(YELLOW, "Increase starting daily dose by 50–100% for H. pylori or erosive esophagitis; "
-                           "monitor efficacy.",
-                   "Consider 1.5–2× starting dose for H. pylori/EE.")
-    if c == "PM":
-        return Rec(YELLOW, "Standard starting dose; for chronic therapy (>12 weeks) with efficacy achieved, "
-                           "consider 50% dose reduction and monitor.",
-                   "Standard start; for chronic use consider 50% reduction.")
-    if c == "IM":
+        return Rec(YELLOW, "Increase starting daily dose by 100%; the daily dose may be given in divided doses. "
+                           "Monitor for efficacy.", "Consider 2× starting daily dose; assess response.")
+    if c in ("RM", "NM"):
+        return _std("Standard start.", "Initiate standard starting daily dose. Consider increasing the dose by "
+                                       "50–100% for H. pylori infection or erosive esophagitis (may be divided). "
+                                       "Monitor for efficacy.")
+    if c in ("IM", "PM"):
         return _std("Standard start; chronic use may allow 50% reduction.",
-                    "Standard starting dose; for chronic therapy with efficacy achieved, consider 50% dose "
-                    "reduction.")
-    return _std("Standard start.", "Standard dosing; consider 50–100% higher dose for H. pylori or "
-                                   "erosive esophagitis.")
+                    "Initiate standard starting daily dose. For chronic therapy (>12 weeks) with efficacy achieved, "
+                    "consider a 50% reduction in daily dose and monitor for continued efficacy.")
+    return _std("Standard start.", "CYP2C19 indeterminate: no CPIC recommendation; use standard dosing.")
 
 
 def ppi_no_rec(gt: Genotypes) -> Rec:
@@ -301,46 +326,65 @@ def nortriptyline(gt: Genotypes) -> Rec:
 
 
 def paroxetine(gt: Genotypes) -> Rec:
+    """CPIC 2023 SSRI guideline, Table 2a."""
     c = gt.code("CYP2D6")
     if c == "UM":
-        return Rec(RED, "Consider an alternative not predominantly metabolized by CYP2D6.",
+        return Rec(RED, "Select an alternative drug not predominantly metabolized by CYP2D6.",
                    "Low levels likely; prefer an alternative.")
     if c == "IM":
-        return Rec(YELLOW, "Consider a lower starting dose and slower titration.",
+        return Rec(YELLOW, "Consider a lower starting dose and slower titration schedule than normal metabolizers.",
                    "Consider lower start and slower titration.")
     if c == "PM":
-        return Rec(YELLOW, "Consider 50% of the usual starting dose and slower titration, or an alternative.",
+        return Rec(YELLOW, "Consider a 50% reduction of the recommended starting dose, a slower titration schedule and "
+                           "a 50% lower maintenance dose than normal metabolizers.",
                    "Consider 50% starting dose, slower titration.")
-    return _std()
+    if c == "IND":
+        return _std("Standard start.", "CYP2D6 indeterminate: no CPIC recommendation.")
+    return _std("Standard start.", "Initiate therapy with the recommended starting dose.")
 
 
 def fluvoxamine(gt: Genotypes) -> Rec:
-    if gt.code("CYP2D6") == "PM":
-        return Rec(YELLOW, "Consider a lower starting dose and slower titration.",
-                   "Consider lower start and slower titration.")
-    return _std()
+    """CPIC 2023 SSRI guideline, Table 2b."""
+    c = gt.code("CYP2D6")
+    if c == "PM":
+        return Rec(YELLOW, "Consider a 25–50% lower starting dose and slower titration schedule than normal "
+                           "metabolizers, or a clinically appropriate alternative not predominantly metabolized by "
+                           "CYP2D6.", "Consider lower start and slower titration.")
+    if c in ("UM", "IND"):
+        return _std("Standard start.", "No CPIC recommendation for this CYP2D6 phenotype.")
+    return _std("Standard start.", "Initiate therapy with the recommended starting dose.")
 
 
 def vortioxetine(gt: Genotypes) -> Rec:
+    """CPIC 2023 SSRI guideline, Table 2d."""
     c = gt.code("CYP2D6")
     if c == "PM":
-        return Rec(YELLOW, "Start at 50% of the usual starting dose; maximum 10 mg/day.",
+        return Rec(YELLOW, "Initiate 50% of the starting dose (e.g., 5 mg) and titrate to a maximum of 10 mg, or "
+                           "consider an alternative antidepressant not predominantly metabolized by CYP2D6.",
                    "Start 50% dose; max 10 mg/day.")
     if c == "UM":
-        return _std("Standard start; may need higher dose or alternative.",
-                    "Standard starting dose; if no response, consider titrating higher or an alternative.")
-    return _std()
+        return Rec(RED, "Select an alternative drug not predominantly metabolized by CYP2D6. If vortioxetine is "
+                        "warranted, start at the standard dose and titrate; the maintenance dose may need to be 50% or "
+                        "more higher.", "Low levels likely; prefer an alternative.")
+    if c == "IND":
+        return _std("Standard start.", "CYP2D6 indeterminate: no CPIC recommendation.")
+    return _std("Standard start.", "Initiate therapy with the recommended starting dose.")
 
 
 def venlafaxine(gt: Genotypes) -> Rec:
-    if gt.code("CYP2D6") == "PM":
-        return Rec(YELLOW, "Consider an alternative not predominantly metabolized by CYP2D6, or a lower "
-                           "dose with close monitoring.", "Consider alternative or lower dose.")
-    return _std()
+    """CPIC 2023 SSRI guideline, Table 2c."""
+    c = gt.code("CYP2D6")
+    if c == "PM":
+        return Rec(RED, "Consider a clinically appropriate alternative antidepressant not predominantly metabolized by "
+                        "CYP2D6.", "Prefer an alternative antidepressant.")
+    if c in ("UM", "IM", "IND"):
+        return _std("Standard start.", "No action recommended based on CYP2D6 (minimal evidence).")
+    return _std("Standard start.", "Initiate therapy with the recommended starting dose.")
 
 
 def fluoxetine(gt: Genotypes) -> Rec:
-    return Rec(GREEN, "No CPIC dose change.", "No CPIC dose change.")
+    # CPIC 2023 SSRI guideline: no gene-based dosing recommendation for fluoxetine (CPIC level C).
+    return Rec(GREEN, "No CPIC gene-based dosing recommendation; dose per usual practice.", "No CPIC dose change.")
 
 
 def metoprolol(gt: Genotypes) -> Rec:
@@ -417,82 +461,117 @@ def midazolam(gt: Genotypes) -> Rec:
 # --------------------------------------------------------------------------- SLCO1B1 statins
 
 def simvastatin(gt: Genotypes) -> Rec:
+    """CPIC 2022 statin guideline, Table 2."""
     c = gt.code("SLCO1B1")
     if c == "DF":
-        return Rec(RED, "Use an alternative statin; if necessary, keep dose <20 mg/day.",
-                   "Alternative statin; if used: simva <20, lova ≤20 mg/day.")
+        return Rec(RED, "Prescribe an alternative statin depending on desired potency. If simvastatin is warranted, "
+                        "limit the dose to <20 mg/day.", "Alternative statin; if used: simva <20, lova ≤20 mg/day.")
     if c == "PF":
-        return Rec(RED, "Use an alternative statin.", "Alternative statin.")
-    return _std()
+        return Rec(RED, "Prescribe an alternative statin depending on desired potency.", "Alternative statin.")
+    return _std("Standard start.", "Prescribe desired starting dose and adjust per disease-specific guidelines.")
 
 
 def lovastatin(gt: Genotypes) -> Rec:
+    """CPIC 2022 statin guideline, Table 2."""
     c = gt.code("SLCO1B1")
     if c == "DF":
-        return Rec(RED, "Use an alternative statin; if necessary, keep dose ≤20 mg/day.",
-                   "Alternative statin; if used: simva <20, lova ≤20 mg/day.")
+        return Rec(RED, "Prescribe an alternative statin depending on desired potency. If lovastatin is warranted, "
+                        "limit the dose to ≤20 mg/day.", "Alternative statin; if used: simva <20, lova ≤20 mg/day.")
     if c == "PF":
-        return Rec(RED, "Use an alternative statin.", "Alternative statin.")
-    return _std()
+        return Rec(RED, "Prescribe an alternative statin depending on desired potency.", "Alternative statin.")
+    return _std("Standard start.", "Prescribe desired starting dose and adjust per disease-specific guidelines.")
 
 
 def atorvastatin(gt: Genotypes) -> Rec:
+    """CPIC 2022 statin guideline, Table 2."""
     c = gt.code("SLCO1B1")
     if c == "DF":
-        return Rec(YELLOW, "Start ≤40 mg/day; if more intensity is needed, use rosuvastatin or combination "
-                           "therapy.", "Usual start; muscle-risk vigilance at high doses.")
+        return Rec(YELLOW, "Prescribe ≤40 mg as a starting dose and adjust per disease-specific guidelines; myopathy "
+                           "risk is higher, especially at 40 mg. If >40 mg is needed, consider combination therapy "
+                           "(atorvastatin plus nonstatin guideline-directed therapy).",
+                   "Usual start; muscle-risk vigilance at high doses.")
     if c == "PF":
-        return Rec(YELLOW, "Start ≤20 mg/day; if more intensity is needed, use rosuvastatin or combination "
-                           "therapy.", "Start ≤20 mg/day; monitor muscle symptoms.")
-    return _std()
+        return Rec(YELLOW, "Prescribe ≤20 mg as a starting dose and adjust per disease-specific guidelines. If >20 mg "
+                           "is needed, consider rosuvastatin or combination therapy (atorvastatin plus nonstatin "
+                           "guideline-directed therapy).", "Start ≤20 mg/day; monitor muscle symptoms.")
+    return _std("Standard start.", "Prescribe desired starting dose and adjust per disease-specific guidelines.")
 
 
 def rosuvastatin(gt: Genotypes) -> Rec:
+    """CPIC 2022 statin guideline, Table 5 (SLCO1B1 x ABCG2)."""
     s, a = gt.code("SLCO1B1"), gt.code("ABCG2")
-    cap = min({"PF": 10, "DF": 20}.get(s, 40), {"PF": 10, "DF": 20}.get(a, 40))
-    if cap == 40:
-        return _std("Standard start.", "Desired starting dose; adjust per disease-specific guidelines.")
-    if cap == 10:
-        return Rec(YELLOW, "Start ≤10 mg/day; if more is needed, use an alternative or combination therapy.",
-                   "Start ≤10 mg/day; monitor muscle symptoms.")
-    return Rec(YELLOW, "Start ≤20 mg/day; if more is needed, use an alternative or combination therapy.",
-               "Usual start; muscle-risk vigilance above 20 mg/day.")
+    asian = " Consider Asian ancestry and population-specific dosing."
+    if a == "PF":
+        cap = 10 if s in ("DF", "PF") else 20
+    elif s == "PF":
+        cap = 20
+    else:
+        cap = None
+    if cap:
+        return Rec(YELLOW, f"Prescribe ≤{cap} mg as a starting dose and adjust per disease- and population-specific "
+                           f"guidelines. If >{cap} mg is needed, consider an alternative statin or combination therapy "
+                           "(rosuvastatin plus nonstatin guideline-directed therapy)." + asian,
+                   f"Start ≤{cap} mg/day; monitor muscle symptoms.")
+    if s == "DF":
+        return Rec(GREEN, "Prescribe desired starting dose and adjust per disease- and population-specific guidelines; "
+                          "be aware of possible increased myopathy risk, especially at doses >20 mg." + asian,
+                   "Usual start; muscle-risk vigilance above 20 mg/day.")
+    return _std("Standard start.", "Prescribe desired starting dose and adjust per disease- and population-specific "
+                                   "guidelines." + asian)
 
 
 def pitavastatin(gt: Genotypes) -> Rec:
+    """CPIC 2022 statin guideline, Table 2."""
     c = gt.code("SLCO1B1")
     if c == "DF":
-        return Rec(YELLOW, "Start ≤2 mg/day; if more is needed, use an alternative.",
+        return Rec(YELLOW, "Prescribe ≤2 mg as a starting dose and adjust per disease-specific guidelines. If >2 mg is "
+                           "needed, consider an alternative statin or combination therapy.",
                    "Start ≤2 mg/day; monitor muscle symptoms.")
     if c == "PF":
-        return Rec(YELLOW, "Start ≤1 mg/day; if more is needed, use an alternative.",
+        return Rec(YELLOW, "Prescribe ≤1 mg as a starting dose and adjust per disease-specific guidelines. If >1 mg is "
+                           "needed, consider an alternative statin or combination therapy.",
                    "Start ≤1 mg/day; monitor muscle symptoms.")
-    return _std()
+    return _std("Standard start.", "Prescribe desired starting dose and adjust per disease-specific guidelines.")
 
 
 def pravastatin(gt: Genotypes) -> Rec:
+    """CPIC 2022 statin guideline, Table 2."""
     c = gt.code("SLCO1B1")
     if c == "PF":
-        return Rec(YELLOW, "Start ≤40 mg/day; if more is needed, use an alternative or combination therapy.",
+        return Rec(YELLOW, "Prescribe ≤40 mg as a starting dose and adjust per disease-specific guidelines. If "
+                           "tolerating 40 mg but higher potency is needed, a higher dose, an alternative statin or "
+                           "combination therapy could be considered; myopathy risk is higher above 40 mg.",
                    "Start ≤40 mg/day; monitor muscle symptoms.")
     if c == "DF":
         return _std("Usual start; myopathy risk higher above 40 mg/day.",
-                    "Desired starting dose; adjust per disease-specific guidelines. Myopathy risk is higher "
-                    "above 40 mg/day.")
-    return _std()
+                    "Prescribe desired starting dose and adjust per disease-specific guidelines. Be aware of possible "
+                    "increased myopathy risk, especially at doses >40 mg/day.")
+    return _std("Standard start.", "Prescribe desired starting dose and adjust per disease-specific guidelines.")
 
 
 def fluvastatin(gt: Genotypes) -> Rec:
+    """CPIC 2022 statin guideline, Table 6 (SLCO1B1 x CYP2C9)."""
     s, c9 = gt.code("SLCO1B1"), gt.code("CYP2C9")
-    if s == "PF" and c9 in ("IM", "PM"):
-        return Rec(RED, "Use an alternative statin.", "Alternative statin.")
+    alt = Rec(RED, "Prescribe an alternative statin depending on desired potency.", "Alternative statin.")
+
+    def cap(mg: int) -> Rec:
+        return Rec(YELLOW, f"Prescribe ≤{mg} mg/day as a starting dose and adjust per disease-specific guidelines. "
+                           f"If >{mg} mg is needed, consider an alternative statin or combination therapy.",
+                   f"Start ≤{mg} mg/day.")
+    if s == "PF":
+        return cap(40) if c9 == "NM" else alt
+    if s == "DF":
+        if c9 == "PM":
+            return alt
+        if c9 == "IM":
+            return cap(20)
+        return _std("Standard start.", "Prescribe desired starting dose; be aware of possible increased myopathy "
+                                       "risk, especially at doses >40 mg/day.")
+    if c9 == "IM":
+        return cap(40)
     if c9 == "PM":
-        return Rec(YELLOW, "Start ≤20 mg/day; if more is needed, use an alternative or combination therapy.",
-                   "Start ≤20 mg/day.")
-    if c9 == "IM" or s == "PF":
-        return Rec(YELLOW, "Start ≤40 mg/day; if more is needed, use an alternative or combination therapy.",
-                   "Start ≤40 mg/day.")
-    return _std("Standard start.", "Desired starting dose; adjust per disease-specific guidelines.")
+        return cap(20)
+    return _std("Standard start.", "Prescribe desired starting dose and adjust per disease-specific guidelines.")
 
 
 # --------------------------------------------------------------------------- warfarin
@@ -579,17 +658,24 @@ def piroxicam(gt: Genotypes) -> Rec:
 
 
 def phenytoin(gt: Genotypes) -> Rec:
+    """CPIC 2020 update, Table 3 (phenytoin/fosphenytoin)."""
     if gt.code("HLA-B*15:02") == "POS":
-        return Rec(RED, "HLA-B*15:02 positive: if phenytoin-naive, do not use (SJS/TEN risk).",
-                   "HLA-B*15:02 positive: avoid if drug-naive.")
+        return Rec(RED, "HLA-B*15:02 positive: if phenytoin-naive, do not use phenytoin/fosphenytoin; avoid "
+                        "carbamazepine and oxcarbazepine. If phenytoin has been used continuously for more than 3 "
+                        "months without a skin reaction, cautiously consider future use. Use caution with other "
+                        "aromatic anticonvulsants.", "HLA-B*15:02 positive: avoid if drug-naive.")
+    if gt.code("CYP2C9") == "IND":
+        return _std("Standard start; drug levels.", "CYP2C9 indeterminate: no CPIC recommendation.")
     s = _cyp2c9_as(gt)
-    if s >= 2.0:
-        return _std("Standard start; drug levels.", "Standard dosing.")
+    monitor = (" Adjust later doses by therapeutic drug monitoring, response and side effects. A negative "
+               "HLA-B*15:02 result does not remove all SJS/TEN risk; monitor per standard practice.")
+    if s >= 1.5:
+        return _std("Standard start; drug levels.", "No adjustment needed; use typical dosing strategies." + monitor)
     if s >= 1.0:
-        return Rec(YELLOW, "Standard loading dose; consider 25% lower maintenance dose; adjust by drug levels.",
-                   "~25% lower maintenance dose; drug levels.")
-    return Rec(YELLOW, "Standard loading dose; consider 50% lower maintenance dose; adjust by drug levels.",
-               "~50% lower maintenance dose; drug levels.")
+        return Rec(YELLOW, "Typical first (loading) dose; use about 25% less than the typical maintenance dose for "
+                           "subsequent doses." + monitor, "~25% lower maintenance dose; drug levels.")
+    return Rec(YELLOW, "Typical first (loading) dose; use about 50% less than the typical maintenance dose for "
+                       "subsequent doses." + monitor, "~50% lower maintenance dose; drug levels.")
 
 
 # --------------------------------------------------------------------------- HLA
@@ -752,10 +838,13 @@ def irinotecan(gt: Genotypes) -> Rec:
 
 
 def ifnl3(gt: Genotypes) -> Rec:
+    """CPIC 2014, Table 2 (peginterferon alfa and ribavirin regimens)."""
     if gt.code("IFNL3") == "UNFAV":
-        return Rec(YELLOW, "Unfavorable response genotype: lower cure rate with peginterferon-based regimens; "
-                           "prefer direct-acting antivirals.", "Lower response; prefer DAAs.")
-    return Rec(GREEN, "Favorable response genotype.", "Favorable response genotype.")
+        return Rec(YELLOW, "Unfavorable response genotype: about 30% chance of SVR after 48 weeks of peginterferon "
+                           "and ribavirin (about 60% with protease inhibitor combinations). Consider implications "
+                           "before starting peginterferon-containing regimens.", "Lower response; prefer DAAs.")
+    return Rec(GREEN, "Favorable response genotype: about 70% chance of SVR after 48 weeks of peginterferon and "
+                      "ribavirin (about 90% with protease inhibitor combinations).", "Favorable response genotype.")
 
 
 def estrogen(gt: Genotypes) -> Rec:
@@ -775,13 +864,13 @@ DRUGS: list[Drug] = [
     # Cardiology & Lipids
     Drug("Clopidogrel", C, ("CYP2C19",), clopidogrel, source="CPIC 2022"),
     Drug("Metoprolol", C, ("CYP2D6",), metoprolol, source="CPIC 2024"),
-    Drug("Simvastatin", C, ("SLCO1B1",), simvastatin),
-    Drug("Lovastatin", C, ("SLCO1B1",), lovastatin),
-    Drug("Atorvastatin", C, ("SLCO1B1",), atorvastatin),
-    Drug("Rosuvastatin", C, ("SLCO1B1", "ABCG2"), rosuvastatin),
-    Drug("Pitavastatin", C, ("SLCO1B1",), pitavastatin),
-    Drug("Pravastatin", C, ("SLCO1B1",), pravastatin),
-    Drug("Fluvastatin", C, ("SLCO1B1", "CYP2C9"), fluvastatin),
+    Drug("Simvastatin", C, ("SLCO1B1",), simvastatin, source="CPIC 2022"),
+    Drug("Lovastatin", C, ("SLCO1B1",), lovastatin, source="CPIC 2022"),
+    Drug("Atorvastatin", C, ("SLCO1B1",), atorvastatin, source="CPIC 2022"),
+    Drug("Rosuvastatin", C, ("SLCO1B1", "ABCG2"), rosuvastatin, source="CPIC 2022"),
+    Drug("Pitavastatin", C, ("SLCO1B1",), pitavastatin, source="CPIC 2022"),
+    Drug("Pravastatin", C, ("SLCO1B1",), pravastatin, source="CPIC 2022"),
+    Drug("Fluvastatin", C, ("SLCO1B1", "CYP2C9"), fluvastatin, source="CPIC 2022"),
     Drug("Warfarin", C, ("CYP2C9", "VKORC1", "CYP4F2"), warfarin),
     Drug("Hydralazine", C, ("NAT2",), hydralazine, source="CPIC 2025"),
     Drug("Procainamide", C, ("NAT2",), _nat2_literature(
@@ -807,19 +896,19 @@ DRUGS: list[Drug] = [
     Drug("Piroxicam", P, ("CYP2C9",), piroxicam, source="CPIC 2020"),
     Drug("Tenoxicam", P, ("CYP2C9",), piroxicam, source="CPIC 2020"),
     # Gastrointestinal
-    Drug("Omeprazole", G, ("CYP2C19",), ppi),
-    Drug("Lansoprazole", G, ("CYP2C19",), ppi),
-    Drug("Pantoprazole", G, ("CYP2C19",), ppi),
-    Drug("Dexlansoprazole", G, ("CYP2C19",), ppi),
+    Drug("Omeprazole", G, ("CYP2C19",), ppi, source="CPIC 2020"),
+    Drug("Lansoprazole", G, ("CYP2C19",), ppi, source="CPIC 2020"),
+    Drug("Pantoprazole", G, ("CYP2C19",), ppi, source="CPIC 2020"),
+    Drug("Dexlansoprazole", G, ("CYP2C19",), ppi, source="CPIC 2020"),
     Drug("Esomeprazole", G, ("CYP2C19",), ppi_no_rec),
     Drug("Rabeprazole", G, ("CYP2C19",), ppi_no_rec),
     Drug("Sulfasalazine", G, ("NAT2",), _nat2_literature(
         YELLOW, "Higher adverse-effect risk in slow acetylators.", "Higher adverse-effect risk."),
          source="Literature"),
     # Psychiatry
-    Drug("Citalopram", Y, ("CYP2C19",), citalopram),
-    Drug("Escitalopram", Y, ("CYP2C19",), citalopram),
-    Drug("Sertraline", Y, ("CYP2C19", "CYP2B6"), sertraline),
+    Drug("Citalopram", Y, ("CYP2C19",), citalopram, source="CPIC 2023"),
+    Drug("Escitalopram", Y, ("CYP2C19",), citalopram, source="CPIC 2023"),
+    Drug("Sertraline", Y, ("CYP2C19", "CYP2B6"), sertraline, source="CPIC 2023"),
     Drug("Amitriptyline", Y, ("CYP2C19", "CYP2D6"), tertiary_tca, source="CPIC 2016"),
     Drug("Clomipramine", Y, ("CYP2C19", "CYP2D6"), tertiary_tca, source="CPIC 2016"),
     Drug("Doxepin", Y, ("CYP2C19", "CYP2D6"), tertiary_tca, source="CPIC 2016"),
@@ -827,15 +916,15 @@ DRUGS: list[Drug] = [
     Drug("Trimipramine", Y, ("CYP2C19", "CYP2D6"), tertiary_tca, source="CPIC 2016"),
     Drug("Nortriptyline", Y, ("CYP2D6",), nortriptyline, source="CPIC 2016"),
     Drug("Desipramine", Y, ("CYP2D6",), nortriptyline, source="CPIC 2016"),
-    Drug("Paroxetine", Y, ("CYP2D6",), paroxetine),
-    Drug("Fluvoxamine", Y, ("CYP2D6",), fluvoxamine),
-    Drug("Vortioxetine", Y, ("CYP2D6",), vortioxetine),
-    Drug("Venlafaxine", Y, ("CYP2D6",), venlafaxine),
-    Drug("Fluoxetine", Y, ("CYP2D6",), fluoxetine),
+    Drug("Paroxetine", Y, ("CYP2D6",), paroxetine, source="CPIC 2023"),
+    Drug("Fluvoxamine", Y, ("CYP2D6",), fluvoxamine, source="CPIC 2023"),
+    Drug("Vortioxetine", Y, ("CYP2D6",), vortioxetine, source="CPIC 2023"),
+    Drug("Venlafaxine", Y, ("CYP2D6",), venlafaxine, source="CPIC 2023"),
+    Drug("Fluoxetine", Y, ("CYP2D6",), fluoxetine, source="CPIC 2023"),
     Drug("Atomoxetine", Y, ("CYP2D6",), atomoxetine, source="CPIC 2019"),
     # Neurology
-    Drug("Phenytoin", N, ("CYP2C9", "HLA-B*15:02"), phenytoin),
-    Drug("Fosphenytoin", N, ("CYP2C9", "HLA-B*15:02"), phenytoin),
+    Drug("Phenytoin", N, ("CYP2C9", "HLA-B*15:02"), phenytoin, source="CPIC 2020"),
+    Drug("Fosphenytoin", N, ("CYP2C9", "HLA-B*15:02"), phenytoin, source="CPIC 2020"),
     Drug("Carbamazepine", N, ("HLA-B*15:02", "HLA-A*31:01"), carbamazepine, source="CPIC 2017"),
     Drug("Oxcarbazepine", N, ("HLA-B*15:02",), oxcarbazepine, source="CPIC 2017"),
     Drug("Amifampridine", N, ("NAT2",), amifampridine, source="FDA label"),
@@ -851,8 +940,8 @@ DRUGS: list[Drug] = [
          source="Literature"),
     Drug("Atazanavir", I, ("UGT1A1",), atazanavir, source="CPIC 2015"),
     Drug("Abacavir", I, ("HLA-B*57:01",), abacavir, source="CPIC 2012/2014"),
-    Drug("Peginterferon alfa", I, ("IFNL3",), ifnl3),
-    Drug("Ribavirin", I, ("IFNL3",), ifnl3),
+    Drug("Peginterferon alfa", I, ("IFNL3",), ifnl3, source="CPIC 2014"),
+    Drug("Ribavirin", I, ("IFNL3",), ifnl3, source="CPIC 2014"),
     # Oncology, Immunology & Transplant
     Drug("Tamoxifen", O, ("CYP2D6",), tamoxifen),
     Drug("Tacrolimus", O, ("CYP3A5", "CYP3A4"), tacrolimus),

@@ -65,7 +65,7 @@ def test_sample_tiers_match_reference(report):
         "Voriconazole": RED, "Citalopram": RED, "Amitriptyline": RED, "Simvastatin": RED, "Lovastatin": RED,
         "Omeprazole": YELLOW, "Hydralazine": YELLOW, "Efavirenz": YELLOW, "Paroxetine": YELLOW,
         "Tramadol": YELLOW, "Codeine": YELLOW, "Hydrocodone": YELLOW, "Tamoxifen": YELLOW,
-        "Atomoxetine": GREEN, "Nortriptyline": YELLOW, "Atorvastatin": YELLOW, "Rosuvastatin": YELLOW,
+        "Atomoxetine": GREEN, "Nortriptyline": YELLOW, "Atorvastatin": YELLOW, "Rosuvastatin": GREEN,
         "Pitavastatin": YELLOW, "Warfarin": YELLOW,
         "Clopidogrel": GREEN, "Sertraline": GREEN, "Metoprolol": GREEN, "Tacrolimus": GREEN,
         "Fluorouracil": GREEN, "Azathioprine": GREEN, "Carbamazepine": GREEN, "Allopurinol": GREEN,
@@ -222,3 +222,27 @@ def test_batch4_cpic(report):
     assert _rec(report, "Meloxicam", CYP2C9=("*3/*3", "Poor Metabolizer")).tier == RED
     assert _rec(report, "Piroxicam", CYP2C9=("*1/*3", "Intermediate Metabolizer")).tier == RED
     assert "CYP2C8*3" in _rec(report, "Ibuprofen", CYP2C9=("*1/*2", "Intermediate Metabolizer")).text
+
+
+def test_batch5_cpic(report):
+    # PPIs (2020): rapid metabolizers standard start; poor metabolizers standard start, 50% for chronic use
+    assert _rec(report, "Omeprazole", CYP2C19=("*1/*17", "Rapid Metabolizer")).tier == GREEN
+    assert "50% reduction" in _rec(report, "Omeprazole", CYP2C19=("*2/*2", "Poor Metabolizer")).text
+    # Phenytoin (2020): AS 1.5 needs no adjustment; AS 1 = 25% lower maintenance
+    assert _rec(report, "Phenytoin", CYP2C9=("*1/*2", "Intermediate Metabolizer")).tier == GREEN
+    assert "25% less" in _rec(report, "Phenytoin", CYP2C9=("*1/*3", "Intermediate Metabolizer")).text
+    # Statins (2022), Tables 5-6
+    assert _rec(report, "Rosuvastatin").tier == GREEN  # SLCO1B1 DF + ABCG2 normal
+    assert "≤20 mg" in _rec(report, "Rosuvastatin", SLCO1B1=("*5/*5", "Poor Function")).text
+    assert "≤10 mg" in _rec(report, "Rosuvastatin", ABCG2=("c.421C>A (A/A)", "Poor Function")).text
+    assert _rec(report, "Fluvastatin", CYP2C9=("*3/*3", "Poor Metabolizer")).tier == RED  # with SLCO1B1 DF
+    assert "≤20 mg" in _rec(report, "Fluvastatin", CYP2C9=("*1/*3", "Intermediate Metabolizer")).text
+    # Sertraline (2023), Table 5
+    assert _rec(report, "Sertraline").tier == GREEN  # CYP2C19 UM + CYP2B6 IM
+    both_pm = _rec(report, "Sertraline", CYP2C19=("*2/*2", "Poor Metabolizer"), CYP2B6=("*6/*6", "Poor Metabolizer"))
+    assert both_pm.tier == RED
+    nm_pm = _rec(report, "Sertraline", CYP2C19=("*1/*1", "Normal Metabolizer"), CYP2B6=("*6/*6", "Poor Metabolizer"))
+    assert "25% reduction" in nm_pm.text
+    # SSRIs/SNRIs CYP2D6 (2023)
+    assert _rec(report, "Venlafaxine", CYP2D6=("*4/*4", "Poor Metabolizer")).tier == RED
+    assert _rec(report, "Vortioxetine", CYP2D6=("*1/*1xN", "Ultra-Rapid Metabolizer")).tier == RED
