@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Optional
 
+from .medications import RULE, UNTESTED, PatientMed, resolve
 from .models import LabReport
 from .phenotypes import GREEN, RED, YELLOW, Gene, Genotypes
 from .rules import CATEGORIES, TIER_ORDER, DrugResult, evaluate
@@ -57,6 +59,8 @@ class Card:
     short: str
     genotype_line: str
     tier: str
+    drugs: list[str] = field(default_factory=list)
+    patient: bool = False  # contains one of the patient's current medications
 
 
 @dataclass
@@ -66,6 +70,27 @@ class Summary:
     results: list[DrugResult]
     cards: dict[str, list[Card]] = field(default_factory=dict)
     no_change: list[str] = field(default_factory=list)
+    patient_meds: list[PatientMed] = field(default_factory=list)
+
+    @property
+    def patient_drugs(self) -> set[str]:
+        """Rule drugs (by name) that are on the patient's medication list."""
+        return {m.name for m in self.patient_meds if m.kind == RULE}
+
+    @property
+    def patient_genes(self) -> set[str]:
+        """Tested genes that affect the patient's current medications."""
+        return {g for m in self.patient_meds if m.kind == RULE for g in m.genes}
+
+    def med_genotype_line(self, med: PatientMed) -> str:
+        if med.result:
+            return _genotype_line([med.result], self.genotypes)
+        if med.genes:
+            tested = [g for g in med.genes if g in self.genotypes]
+            if tested and med.kind != UNTESTED:
+                return "; ".join(_gene_token(self.genotypes[g], True) for g in tested)
+            return " / ".join(med.genes) + (" · not tested" if med.kind == UNTESTED else "")
+        return ""
 
     @property
     def flagged_genes(self) -> list[Gene]:
@@ -86,10 +111,13 @@ class Summary:
         return out
 
 
-def build_summary(report: LabReport) -> Summary:
+def build_summary(report: LabReport, medications: Optional[list[str]] = None) -> Summary:
+    """medications: the operator's entries for the patient's current medications (optional)."""
     gt = Genotypes(report)
     results = evaluate(gt)
     s = Summary(report=report, genotypes=gt, results=results)
+    s.patient_meds = resolve(medications or [], results)
+    mine = s.patient_drugs
     by_name = {r.drug.name: r for r in results}
     s.cards = {RED: [], YELLOW: [], GREEN: []}
 
@@ -99,7 +127,7 @@ def build_summary(report: LabReport) -> Summary:
         if r is None:
             continue
         if r.tier == GREEN:
-            s.no_change.append(name.lower())
+            s.no_change.append(("★" if name in mine else "") + name.lower())
         else:
             card_defs.append((name,))
     for name in FLAGGED_ONLY:
@@ -113,14 +141,17 @@ def build_summary(report: LabReport) -> Summary:
         for r in present:
             groups.setdefault((r.tier, r.rec.short), []).append(r)
         for (tier, short), rs in groups.items():
-            s.cards[tier].append(Card(title=_card_title(rs), short=short,
-                                      genotype_line=_genotype_line(rs, gt), tier=tier))
+            names_here = [r.drug.name for r in rs]
+            s.cards[tier].append(Card(title=_card_title(rs, mine), short=short,
+                                      genotype_line=_genotype_line(rs, gt), tier=tier, drugs=names_here,
+                                      patient=any(n in mine for n in names_here)))
     return s
 
 
-def _card_title(rs: list[DrugResult]) -> str:
+def _card_title(rs: list[DrugResult], mine: frozenset[str] | set[str] = frozenset()) -> str:
     names = [r.drug.one_page_name for r in rs]
-    return " · ".join([names[0]] + [n if n.isupper() or "-" in n[:3] else n.lower() for n in names[1:]])
+    names = [names[0]] + [n if n.isupper() or "-" in n[:3] else n.lower() for n in names[1:]]
+    return " · ".join(("★" if r.drug.name in mine else "") + n for r, n in zip(rs, names))
 
 
 def _gene_token(g: Gene, with_label: bool) -> str:

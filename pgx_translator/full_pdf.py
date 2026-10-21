@@ -61,6 +61,16 @@ ST = {
     "cardval": ParagraphStyle("cardval", fontName=F, fontSize=11.5, leading=14),
 }
 INNER = HexColor("#BFBFBF")
+GREY_BOX = HexColor("#8C96A0")
+MED_COLOR = {**TIER_COLOR, "grey": GREY_BOX}
+MED_TINT = {RED: HexColor("#FDE8E8"), YELLOW: HexColor("#FFF5DA"), GREEN: HexColor("#E6F6EC"),
+            "grey": HexColor("#F2F2F2")}
+HILITE = HexColor("#FFF2CC")  # gene rows that affect the patient's medications
+STAR = esc("★")  # Carlito has no star glyph; esc() swaps in DejaVu
+
+
+def _hex(color) -> str:
+    return "#" + color.hexval()[2:]
 
 
 class Rule(Flowable):
@@ -145,6 +155,9 @@ def _cover(summary: Summary) -> list:
     ]))
     story += [lt, Spacer(1, 22)]
 
+    if summary.patient_meds:
+        story += _patient_meds(summary)
+
     story += _heading("How to Read This Report")
     for para in HOW_TO_READ:
         story.append(Paragraph(para, ST["body"]))
@@ -155,11 +168,42 @@ def _cover(summary: Summary) -> list:
     return story
 
 
+def _patient_meds(summary: Summary) -> list:
+    """Patient medication list: each medication boxed in the colour of its recommendation."""
+    story = _heading("Patient Medications")
+    story.append(P("Current medications entered for this report. Box color shows this patient's recommendation; "
+                   "grey means no CPIC gene-based guidance applies or the gene was not tested. ★ marks these "
+                   "medications throughout the report.", "hint"))
+    story.append(Spacer(1, 6))
+    widths = [CONTENT_W * w for w in (0.24, 0.24, 0.40, 0.12)]
+    story.append(_header_row(["Medication", "Gene result", "Recommendation", "Source"], widths))
+    for m in summary.patient_meds:
+        name = esc(m.display_name)
+        if m.kind == "rule":
+            name = f'<a href="#{drug_anchor(m.name)}" color="#{LINK_BLUE}"><u>{STAR} {name}</u></a>'
+        sub = f'<br/><font size="9" color="#555555">entered: {esc(m.entered)}</font>' if m.entered_differs else ""
+        if m.fuzzy:
+            sub += '<br/><font size="9" color="#AA263A">spelling matched approximately; please confirm</font>'
+        status = f'<font name="{FB}" size="9" color="{_hex(MED_COLOR[m.tier])}">{m.status}</font><br/>'
+        cells = [Paragraph(f'<font name="{FB}">{name}</font>{sub}', ST["cell"]),
+                 P(summary.med_genotype_line(m) or "—", "cell"),
+                 Paragraph(status + esc(m.text, bold=True), ST["cellb"]),
+                 P(m.source, "cell")]
+        row = _boxed_row(cells, widths, MED_COLOR[m.tier], box_width=2.4)
+        row.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), MED_TINT[m.tier])]))
+        story += [Spacer(1, 2.5), row]
+    story.append(Spacer(1, 16))
+    return story
+
+
 def _key_drugs_para(summary: Summary, gene: str) -> Paragraph:
     """Key-drugs cell: each drug name links to its card in All Medications."""
     parts = []
+    mine = {drug_anchor(n) for n in summary.patient_drugs}
     for text, anchor in key_drug_segments(summary, gene):
-        if anchor:
+        if anchor in mine:
+            parts.append(f'<a href="#{anchor}" color="#{LINK_BLUE}"><u><b>{STAR}{esc(text)}</b></u></a>')
+        elif anchor:
             parts.append(f'<a href="#{anchor}" color="#{LINK_BLUE}"><u>{esc(text)}</u></a>')
         else:
             parts.append(esc(text))
@@ -177,8 +221,13 @@ def _gene_table(summary: Summary) -> list:
             pheno += "*"
             footnote = True
         story.append(Spacer(1, 1.5))
-        story.append(_boxed_row([P(g.name, "cellb"), P(g.genotype, "cell"), P(pheno, "cellb"),
-                                 _key_drugs_para(summary, g.name)], widths, TIER_COLOR[g.tier], pad=1.5))
+        mine = g.name in summary.patient_genes
+        row = _boxed_row([P(("★ " if mine else "") + g.name, "cellb"), P(g.genotype, "cell"), P(pheno, "cellb"),
+                          _key_drugs_para(summary, g.name)], widths, TIER_COLOR[g.tier],
+                         box_width=2.6 if mine else 1.6, pad=1.5)
+        if mine:
+            row.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), HILITE)]))
+        story.append(row)
     if footnote:
         story += [Spacer(1, 4), P("*CYP3A5 *3/*3 is the most common genotype in people of European ancestry "
                                   "and means standard tacrolimus dosing.", "note")]
@@ -194,7 +243,9 @@ def _quick_reference(summary: Summary) -> list:
         col = []
         for cat, rows in summary.by_category((tier,)).items():
             col.append(P(cat, "qrh"))
-            col.append(P(", ".join(r.drug.name for r in rows), "qr"))
+            mine = summary.patient_drugs
+            col.append(Paragraph(", ".join(f"<b>{STAR}{esc(r.drug.name)}</b>" if r.drug.name in mine else esc(r.drug.name)
+                                           for r in rows), ST["qr"]))
         if not col:
             col.append(P("None", "qr"))
         cols.append(col)
@@ -215,13 +266,17 @@ def _quick_reference(summary: Summary) -> list:
     return story
 
 
-def _card(r, bookmark: bool) -> Table:
+def _card(r, bookmark: bool, mine: bool = False) -> Table:
     """One drug as a vertical card: name/status, recommendation, gene(s) + source."""
     name = esc(r.drug.name)
+    if mine:
+        name = esc("★ ") + name
     if bookmark:
         name = f'<a name="{drug_anchor(r.drug.name)}"/>' + name
+    tag = (f'&nbsp;&nbsp;&nbsp;<font size="10.5" color="{_hex(TIER_COLOR[r.tier])}">CURRENT MEDICATION</font>'
+           if mine else "")
     head = Paragraph(f'{name}<font size="10.5">&nbsp;&nbsp;&nbsp;\u2013&nbsp;&nbsp;&nbsp;'
-                     f'{STATUS_LABEL[r.tier]}</font>', ST["cardname"])
+                     f'{STATUS_LABEL[r.tier]}</font>{tag}', ST["cardname"])
     genes = Paragraph(f'{esc(", ".join(r.drug.genes))}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'
                       f'<font name="{FB}" size="11">Source:</font> {esc(r.source)}', ST["cardval"])
     data = [[head, ""],
@@ -230,7 +285,8 @@ def _card(r, bookmark: bool) -> Table:
     t = Table(data, colWidths=[1.6 * inch, CONTENT_W - 1.6 * inch])
     t.setStyle(TableStyle([
         ("SPAN", (0, 0), (1, 0)),
-        ("BOX", (0, 0), (-1, -1), 1.8, TIER_COLOR[r.tier]),
+        ("BOX", (0, 0), (-1, -1), 3.2 if mine else 1.8, TIER_COLOR[r.tier]),
+        *([("BACKGROUND", (0, 0), (-1, -1), MED_TINT[r.tier])] if mine else []),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, INNER),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
@@ -250,7 +306,7 @@ def _drug_tables(summary: Summary, tiers, title: str, subtitle: str = "", bookma
     for cat, rows in summary.by_category(tiers).items():
         heading = [Spacer(1, 6)] + _heading(cat)
         for i, r in enumerate(rows):
-            card = [_card(r, bookmark), Spacer(1, 7)]
+            card = [_card(r, bookmark, r.drug.name in summary.patient_drugs), Spacer(1, 7)]
             # keep each card whole, and keep the category heading with its first card
             story.append(KeepTogether((heading if i == 0 else []) + card))
     return story

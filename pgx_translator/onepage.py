@@ -34,6 +34,9 @@ TIERS = {
                 title="GREEN  |  STANDARD PGx START", note="Clinical monitoring still applies"),
 }
 GENE_COLORS = {RED: HexColor("#AA263A"), YELLOW: HexColor("#925F00"), GREEN: HexColor("#126A53")}
+GREY = HexColor("#7A8794")
+MED_BORDER = {RED: HexColor("#D62839"), YELLOW: HexColor("#E0A100"), GREEN: HexColor("#1E9E6A"), "grey": GREY}
+MED_TEXT = {RED: GENE_COLORS[RED], YELLOW: GENE_COLORS[YELLOW], GREEN: GENE_COLORS[GREEN], "grey": GREY}
 
 BOLD, REG = "DejaVu-Bold", "DejaVu"
 
@@ -74,6 +77,34 @@ def _card_lines(card: Card, L: _Layout):
     g = simpleSplit(card.genotype_line, BOLD, L.geno, COL_W)
     h = len(t) * L.lh_title + len(s) * L.lh_short + 3 * L.s + len(g) * L.lh_geno + L.card_gap
     return t, s, g, h
+
+
+def _med_lines(med, summary: Summary, L: _Layout):
+    status_w = simpleSplit(med.status, BOLD, 6.2 * L.s, COL_W)[0]
+    name = ("★ " if med.kind == "rule" else "") + med.display_name
+    if med.entered_differs:
+        name += f" ({med.entered})"
+    sw = _width(status_w, BOLD, 6.2 * L.s)
+    t = simpleSplit(name, BOLD, L.title, COL_W - sw - 8)
+    g_text = summary.med_genotype_line(med)
+    g = simpleSplit(g_text, BOLD, L.geno, COL_W) if g_text else []
+    sh = simpleSplit(med.short, REG, L.short, COL_W)
+    h = 4 * L.s + len(t) * L.lh_title + len(g) * L.lh_geno + len(sh) * L.lh_short + 5 * L.s
+    return t, g, sh, h
+
+
+def _width(text: str, font: str, size: float) -> float:
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    return stringWidth(text, font, size)
+
+
+def _meds_height(summary: Summary, L: _Layout) -> float:
+    meds = summary.patient_meds
+    if not meds:
+        return 0
+    hs = [_med_lines(m, summary, L)[3] for m in meds]
+    rows = [max(hs[i:i + 2]) + 4 * L.s for i in range(0, len(hs), 2)]
+    return L.panel_head + sum(rows) + L.panel_pad
 
 
 def _panel_height(cards: list[Card], L: _Layout) -> float:
@@ -134,6 +165,10 @@ def render_one_page(summary: Summary, out_path: str | Path) -> Path:
         col = (PANEL_W - 20) / max(6, len(genes))
         for i, g in enumerate(genes):
             x = 34 + i * col
+            if g.name in summary.patient_genes:  # gene affects one of the patient's medications
+                c.setStrokeColor(MED_BORDER[g.tier])
+                c.setLineWidth(1.2)
+                c.roundRect(x - 4, y(top + 24.5), col - 2, 22, 3, stroke=1, fill=0)
             c.setFillColor(GENE_COLORS[g.tier])
             label = g.short_label.upper()
             fit = col - 6
@@ -150,16 +185,65 @@ def render_one_page(summary: Summary, out_path: str | Path) -> Path:
     avail_top, avail_bottom = 114, 738
     gap = 7
     tiers = [t for t in (RED, YELLOW, GREEN) if summary.cards.get(t)]
+    n_panels = len(tiers) + (1 if summary.patient_meds else 0)
     scale = 1.0
-    while scale > 0.7:
+    while scale > 0.6:
         L = _Layout(scale)
-        total = sum(_panel_height(summary.cards[t], L) for t in tiers) + gap * (len(tiers) - 1)
+        total = (sum(_panel_height(summary.cards[t], L) for t in tiers) + _meds_height(summary, L)
+                 + gap * (n_panels - 1))
         if total <= avail_bottom - avail_top:
             break
         scale -= 0.02
     L = _Layout(scale)
 
     cur = avail_top
+    if summary.patient_meds:
+        h = _meds_height(summary, L)
+        c.setFillColor(PANEL)
+        c.roundRect(PANEL_X, y(cur + h), PANEL_W, h, 5, stroke=0, fill=1)
+        c.setFillColor(NAVY)
+        c.rect(PANEL_X, y(cur + 7 + 15 * L.s), 3.5, 15 * L.s, stroke=0, fill=1)
+        c.setFont(BOLD, 9.3 * L.s)
+        c.drawString(34, y(cur + 7 + 11 * L.s), f"★ PATIENT MEDICATIONS  ({len(summary.patient_meds)})")
+        c.setFillColor(MUTED)
+        c.setFont(REG, 6.2)
+        c.drawRightString(PANEL_X + PANEL_W - 10, y(cur + 7 + 10.5 * L.s),
+                          "Box color = this patient's recommendation  ·  grey = no CPIC gene-based guidance")
+        row_top = cur + L.panel_head
+        meds = summary.patient_meds
+        for i in range(0, len(meds), 2):
+            row = meds[i:i + 2]
+            heights = [_med_lines(m, summary, L)[3] for m in row]
+            rh = max(heights)
+            for j, med in enumerate(row):
+                t_lines, g_lines, s_lines, _ = _med_lines(med, summary, L)
+                x = CARD_X0 + j * (COL_W + COL_GAP)
+                c.setFillColor(white)
+                c.setStrokeColor(MED_BORDER[med.tier])
+                c.setLineWidth(1.6)
+                c.roundRect(x - 5, y(row_top + rh), COL_W + 10, rh, 3, stroke=1, fill=1)
+                yy = row_top + 4 * L.s
+                c.setFillColor(MED_TEXT[med.tier])
+                c.setFont(BOLD, 6.2 * L.s)
+                c.drawRightString(x + COL_W, y(yy + L.lh_title - 2.4 * L.s), med.status)
+                c.setFillColor(INK)
+                c.setFont(BOLD, L.title)
+                for line in t_lines:
+                    yy += L.lh_title
+                    c.drawString(x, y(yy - 2.2 * L.s), line)
+                c.setFillColor(BLUE if med.kind == "rule" else GREY)
+                c.setFont(BOLD, L.geno)
+                for line in g_lines:
+                    yy += L.lh_geno
+                    c.drawString(x, y(yy - 1.8 * L.s), line)
+                c.setFillColor(MUTED)
+                c.setFont(REG, L.short)
+                for line in s_lines:
+                    yy += L.lh_short
+                    c.drawString(x, y(yy - 2 * L.s), line)
+            row_top += rh + 4 * L.s
+        cur += h + gap
+
     for t in tiers:
         cards = summary.cards[t]
         style = TIERS[t]
@@ -183,6 +267,11 @@ def render_one_page(summary: Summary, out_path: str | Path) -> Path:
                 heights.append(ch)
                 x = CARD_X0 + j * (COL_W + COL_GAP)
                 yy = row_top
+                if card.patient:  # outline cards holding the patient's medications
+                    c.setStrokeColor(MED_BORDER[card.tier])
+                    c.setLineWidth(1.6)
+                    c.roundRect(x - 5, y(row_top + ch - L.card_gap + 3 * L.s), COL_W + 10,
+                                ch - L.card_gap + 4 * L.s, 3, stroke=1, fill=0)
                 c.setFillColor(INK)
                 c.setFont(BOLD, L.title)
                 for line in t_lines:

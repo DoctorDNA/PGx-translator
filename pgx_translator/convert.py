@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 from .full_docx import render_full_docx
 from .full_pdf import render_full_pdf
@@ -20,9 +21,11 @@ class Outputs:
     files: list[Path]
 
 
-def convert(quest_pdf: str | Path, out_dir: str | Path = ".", formats=FORMATS) -> Outputs:
+def convert(quest_pdf: str | Path, out_dir: str | Path = ".", formats=FORMATS,
+            medications: Optional[list[str]] = None) -> Outputs:
+    """medications: the patient's current medications as typed by the operator (optional)."""
     report = parse_pdf(quest_pdf)
-    summary = build_summary(report)
+    summary = build_summary(report, medications)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     stub = report.patient.file_stub

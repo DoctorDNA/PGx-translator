@@ -22,6 +22,9 @@ from .summary import Summary
 NAVY = RGBColor(0x0A, 0x16, 0x28)
 FOOT = RGBColor(0x7F, 0x7F, 0x7F)
 TIER_HEX = {RED: "FF0000", YELLOW: "FFC000", GREEN: "00B050"}
+MED_HEX = {**TIER_HEX, "grey": "8C96A0"}
+MED_TINT = {RED: "FDE8E8", YELLOW: "FFF5DA", GREEN: "E6F6EC", "grey": "F2F2F2"}
+HILITE = "FFF2CC"  # gene rows that affect the patient's medications
 FONT = "Calibri"
 
 
@@ -159,17 +162,19 @@ def _header_cells(t, labels, size=8.5):
         _borders(cell, top=("0A1628", 18))
 
 
-def _tier_row(row, tier):
-    """Outline a row in its tier colour (thick outer edges, thin inner grid)."""
-    color = TIER_HEX[tier]
+def _tier_row(row, tier, sz=18, fill=None):
+    """Outline a row in its tier colour (thick outer edges, thin inner grid); optional cell shading."""
+    color = MED_HEX[tier]
     n = len(row.cells)
     for i, cell in enumerate(row.cells):
-        sides = {"top": (color, 18), "bottom": (color, 18)}
+        sides = {"top": (color, sz), "bottom": (color, sz)}
         if i == 0:
-            sides["left"] = (color, 18)
+            sides["left"] = (color, sz)
         if i == n - 1:
-            sides["right"] = (color, 18)
+            sides["right"] = (color, sz)
         _borders(cell, **sides)
+        if fill:
+            _shade(cell, fill)
 
 
 _bookmark_id = [0]
@@ -221,19 +226,26 @@ def _bookmarked_run(p, text, anchor, **kw):
     return r
 
 
-def _card(doc, r, bookmark: bool):
+def _card(doc, r, bookmark: bool, mine: bool = False):
     """One drug as a vertical card: name/status, recommendation, gene(s) + source."""
     color = TIER_HEX[r.tier]
-    thick, thin = (color, 18), ("BFBFBF", 4)
+    thick, thin = (color, 30 if mine else 18), ("BFBFBF", 4)
     widths = [Inches(1.6), Inches(5.9)]
     t = _table(doc, 3, widths)
     head = t.rows[0].cells[0].merge(t.rows[0].cells[1])
     p = head.paragraphs[0]
+    label = ("★ " if mine else "") + r.drug.name
     if bookmark:
-        _bookmarked_run(p, r.drug.name, drug_anchor(r.drug.name), bold=True, size=15)
+        _bookmarked_run(p, label, drug_anchor(r.drug.name), bold=True, size=15)
     else:
-        _run(p, r.drug.name, bold=True, size=15)
+        _run(p, label, bold=True, size=15)
     _run(p, "   \u2013   " + STATUS_LABEL[r.tier], bold=True, size=10.5)
+    if mine:
+        _run(p, "   CURRENT MEDICATION", bold=True, size=10.5, color=RGBColor.from_string(
+            {RED: "C00000", YELLOW: "9C6500", GREEN: "007A3D"}[r.tier]))
+        for row in t.rows:
+            for cell in row.cells:
+                _shade(cell, MED_TINT[r.tier])
     p.paragraph_format.space_after = Pt(0)
     p.paragraph_format.keep_with_next = True
     _borders(head, top=thick, left=thick, right=thick, bottom=thin)
@@ -314,6 +326,9 @@ def _cover(doc, summary: Summary):
         _borders(cell, left=(TIER_HEX[tier], 36))
     _para(doc, space_after=8)
 
+    if summary.patient_meds:
+        _patient_meds(doc, summary)
+
     _heading(doc, "How to Read This Report", size=15)
     for text in HOW_TO_READ:
         p = _para(doc, space_after=7)
@@ -331,6 +346,40 @@ def _cover(doc, summary: Summary):
     _page_break(doc)
 
 
+def _patient_meds(doc, summary: Summary):
+    """Patient medication list: each medication boxed in the colour of its recommendation."""
+    _heading(doc, "Patient Medications", size=15)
+    _para(doc, "Current medications entered for this report. Box color shows this patient's recommendation; grey "
+               "means no CPIC gene-based guidance applies or the gene was not tested. ★ marks these medications "
+               "throughout the report.", italic=True, size=10.5, space_after=4)
+    widths = [Inches(1.8), Inches(1.8), Inches(3.0), Inches(0.9)]
+    t = _table(doc, len(summary.patient_meds) + 1, widths)
+    _header_cells(t, ["Medication", "Gene result", "Recommendation", "Source"], size=11)
+    for row, m in zip(t.rows[1:], summary.patient_meds):
+        c0 = row.cells[0].paragraphs[0]
+        c0.paragraph_format.space_after = Pt(0)
+        if m.kind == "rule":
+            _link(c0, "★ " + m.display_name, drug_anchor(m.name), size=11, bold=True)
+        else:
+            _run(c0, m.display_name, bold=True, size=11)
+        if m.entered_differs:
+            _run(row.cells[0].add_paragraph(), f"entered: {m.entered}", italic=True, size=9, color=FOOT)
+        if m.fuzzy:
+            _run(row.cells[0].add_paragraph(), "spelling matched approximately; please confirm", italic=True, size=9,
+                 color=RGBColor(0xAA, 0x26, 0x3A))
+        row.cells[0].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        _cell_text(row.cells[1], summary.med_genotype_line(m) or "—", size=10.5)
+        rp = row.cells[2].paragraphs[0]
+        rp.paragraph_format.space_after = Pt(0)
+        _run(rp, m.status + "\n", bold=True, size=9,
+             color=RGBColor.from_string({RED: "C00000", YELLOW: "9C6500", GREEN: "007A3D", "grey": "5F6B76"}[m.tier]))
+        _run(rp, m.text, bold=True, size=10.5)
+        row.cells[2].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        _cell_text(row.cells[3], m.source, size=10)
+        _tier_row(row, m.tier, sz=30, fill=MED_TINT[m.tier])
+    _para(doc, space_after=10)
+
+
 def _gene_results(doc, summary: Summary):
     _heading(doc, "Gene Results", size=15)
     _para(doc, LINK_HINT, italic=True, size=10.5, space_after=4).paragraph_format.keep_with_next = True
@@ -344,18 +393,22 @@ def _gene_results(doc, summary: Summary):
         if g.name == "CYP3A5" and g.code == "PM":
             pheno += "*"
             footnote = True
-        _cell_text(row.cells[0], g.name, bold=True, size=12)
+        mine = g.name in summary.patient_genes
+        _cell_text(row.cells[0], ("★ " if mine else "") + g.name, bold=True, size=12)
         _cell_text(row.cells[1], g.genotype, size=12)
         _cell_text(row.cells[2], pheno, bold=True, size=12)
         kp = row.cells[3].paragraphs[0]
         kp.paragraph_format.space_after = Pt(0)
         row.cells[3].vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        my_anchors = {drug_anchor(n) for n in summary.patient_drugs}
         for text, anchor in key_drug_segments(summary, g.name):
-            if anchor:
+            if anchor in my_anchors:
+                _link(kp, "★" + text, anchor, size=12, bold=True)
+            elif anchor:
                 _link(kp, text, anchor, size=12)
             else:
                 _run(kp, text, size=12)
-        _tier_row(row, g.tier)
+        _tier_row(row, g.tier, sz=30 if mine else 18, fill=HILITE if mine else None)
     note = ("*CYP3A5 *3/*3 is the most common genotype in people of European ancestry and means "
             "standard tacrolimus dosing.") if footnote else ""
     p = _para(doc, note, italic=True, size=9, space_before=2)
@@ -383,7 +436,11 @@ def _quick_reference(doc, summary: Summary):
             _run(p, cat, bold=True, size=11.5, color=NAVY)
             p = bc.add_paragraph()
             p.paragraph_format.space_after = Pt(4)
-            _run(p, ", ".join(r.drug.name for r in rows), size=11)
+            for k, r in enumerate(rows):
+                if k:
+                    _run(p, ", ", size=11)
+                mine = r.drug.name in summary.patient_drugs
+                _run(p, ("★" if mine else "") + r.drug.name, bold=mine, size=11)
         if first:
             _run(bc.paragraphs[0], "None", size=11)
     _para(doc, QUICK_REF_NOTE, italic=True, size=9, space_before=3)
@@ -398,7 +455,7 @@ def _drug_tables(doc, summary: Summary, tiers, title, subtitle="", bookmark=Fals
     for cat, rows in summary.by_category(tiers).items():
         _heading(doc, cat, size=15, space_before=10)
         for r in rows:
-            _card(doc, r, bookmark)
+            _card(doc, r, bookmark, r.drug.name in summary.patient_drugs)
 
 
 def _notes(doc, summary: Summary):

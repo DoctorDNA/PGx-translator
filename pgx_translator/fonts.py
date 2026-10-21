@@ -39,7 +39,7 @@ def register_fonts() -> None:
 
 
 # Carlito's Latin subset lacks these; render them with DejaVu inside Paragraph markup.
-_MISSING_IN_CARLITO = "≤≥→"
+_MISSING_IN_CARLITO = "≤≥→★"
 
 
 def carlito_safe(text: str, bold: bool = False) -> str:

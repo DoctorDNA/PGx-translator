@@ -256,3 +256,56 @@ def test_final_batch_cpic(report):
     assert im.tier == YELLOW and "aromatase inhibitor" in im.text
     assert _rec(report, "Tamoxifen", CYP2D6=("*4/*4", "Poor Metabolizer")).tier == RED
     assert "0.3 mg/kg/day" in _rec(report, "Tacrolimus", CYP3A5=("*1/*3", "Intermediate Metabolizer")).text
+
+
+# ---------------------------------------------------------------- patient medications
+
+def test_medication_matching():
+    from pgx_translator.medications import match_entry, split_entries
+    assert match_entry("Lipitor 40 mg daily").names == ["Atorvastatin"]
+    assert match_entry("Tylenol #3").names == ["Codeine"]
+    assert match_entry("hydrocodone/acetaminophen 5/325").names == ["Hydrocodone"]
+    assert match_entry("5-FU").names == ["Fluorouracil"]
+    typo = match_entry("atorvastatn")
+    assert typo.names == ["Atorvastatin"] and typo.fuzzy
+    for other in ["lisinopril", "metformin", "trazodone", "hydroxyzine", "clonidine", "amlodipine", "gabapentin"]:
+        assert match_entry(other).names == [], other
+    assert split_entries("a, b; c\nd") == ["a", "b", "c", "d"]
+
+
+def test_patient_meds_in_summary(report):
+    s = build_summary(report, ["Lipitor 40 mg", "sertraline", "sevoflurane", "naproxen", "lisinopril"])
+    kinds = {m.display_name: (m.kind, m.tier) for m in s.patient_meds}
+    assert kinds["Atorvastatin"] == ("rule", YELLOW)
+    assert kinds["Sertraline"] == ("rule", GREEN)
+    assert kinds["Sevoflurane"][0] == "untested"
+    assert kinds["Naproxen"][0] == "norec"
+    assert kinds["lisinopril"][0] == "unknown"
+    assert [m.display_name for m in s.patient_meds][0] == "Atorvastatin"  # actionable first
+    assert {"SLCO1B1", "CYP2C19", "CYP2B6"} <= s.patient_genes
+    assert any(c.patient and "Atorvastatin" in c.drugs for c in s.cards[YELLOW])
+
+
+def test_patient_meds_rendered(report, tmp_path):
+    import zipfile
+    import pdfplumber
+    s = build_summary(report, ["Plavix 75", "Prilosec"])
+    one = render_one_page(s, tmp_path / "one.pdf")
+    with pdfplumber.open(one) as pdf:
+        assert len(pdf.pages) == 1
+        text = pdf.pages[0].extract_text()
+    assert "PATIENT MEDICATIONS" in text and "Clopidogrel (Plavix 75)" in text
+    full = render_full_pdf(s, tmp_path / "full.pdf")
+    with pdfplumber.open(full) as pdf:
+        assert "Patient Medications" in pdf.pages[0].extract_text()
+        assert "CURRENT MEDICATION" in "".join(p.extract_text() or "" for p in pdf.pages)
+    xml = zipfile.ZipFile(render_full_docx(s, tmp_path / "r.docx")).read("word/document.xml").decode()
+    assert "Patient Medications" in xml and "CURRENT MEDICATION" in xml
+
+
+def test_web_check_endpoint():
+    pytest.importorskip("flask")
+    from pgx_translator.web import app
+    c = app.test_client()
+    assert c.get("/check?q=Zoloft").json["cls"] == "ok"
+    assert c.get("/check?q=lisinopril").json["cls"] == "none"

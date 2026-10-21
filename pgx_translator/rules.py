@@ -258,7 +258,7 @@ def _codeine_like(other: str) -> Callable[[Genotypes], Rec]:
         if c == "IM":
             return Rec(YELLOW, "Use label-recommended age- or weight-specific dosing. If no response and opioid "
                                f"use is warranted, consider a non-{other} opioid.",
-                       "Usual start; tramadol may give less analgesia. Switch if ineffective.")
+                       "Usual start; may give less analgesia. Switch if ineffective.")
         if c == "IND":
             return Rec(GREEN, "CYP2D6 indeterminate: no CPIC recommendation.", "No CPIC recommendation.")
         return _std("Label dosing.", "Use label-recommended age- or weight-specific dosing.")
@@ -271,7 +271,7 @@ def hydrocodone(gt: Genotypes) -> Rec:
     if c in ("IM", "PM"):
         return Rec(YELLOW, "Use label-recommended age- or weight-specific dosing. If no response and opioid use is "
                            "warranted, consider a non-codeine, non-tramadol opioid.",
-                   "Usual start; tramadol may give less analgesia. Switch if ineffective."
+                   "Usual start; may give less analgesia. Switch if ineffective."
                    if c == "IM" else "Label dosing; switch if ineffective.")
     if c in ("UM", "IND"):
         return Rec(GREEN, "No CPIC recommendation (minimal evidence); label dosing.", "Label dosing.")

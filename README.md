@@ -22,6 +22,22 @@ python3 -m pip install -r requirements.txt
 3. Double-click **Start Web Page.bat**, or drag a Quest PDF onto **Convert (drag PDF here).bat**.
    The first run installs the libraries it needs; reports are saved in `morpheus_reports`.
 
+## Patient medications (v1.4)
+
+Enter the patient's current medications and every report gets a **Patient Medications** section at the top.
+Each medication is boxed in the colour of this patient's recommendation (red / yellow / green). Grey means
+CPIC has no gene-based guidance, the gene isn't on the Quest panel, or the drug isn't recognized. The matching
+genes, drug cards and quick-reference entries are marked with ★ and highlighted throughout the report.
+
+- **Web page:** type a generic or brand name (type-ahead list), press Add; each entry shows what it matched.
+- **Drag-and-drop .bat:** after dropping the PDF, type the medications separated by commas, or press Enter.
+- **Command line:** `python3 -m pgx_translator report.pdf --meds "Lipitor 40 mg, Zoloft, Norco"` or
+  `--meds-file meds.txt` (one per line).
+
+Doses and extra words are ignored, brand names and combination products are recognized ("Tylenol #3" →
+codeine), and close misspellings are matched but flagged "please confirm". `CPIC_DRUG_LIST.md` (or
+`python3 -m pgx_translator --list-drugs`) lists every recognized medication.
+
 ## Use
 
 **Command line**

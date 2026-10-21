@@ -13,7 +13,12 @@ if not exist ".installed" (
   %PY% -m pip install -r requirements.txt || goto :fail
   echo ok> .installed
 )
-%PY% -m pgx_translator %* -o "%~dp0morpheus_reports"
+echo.
+echo Type the patient's current medications, separated by commas
+echo (brand or generic names are fine), or just press Enter to skip:
+set "MEDS="
+set /p "MEDS=Medications: "
+%PY% -m pgx_translator %* -o "%~dp0morpheus_reports" --meds "%MEDS%"
 echo.
 echo Done. Opening the morpheus_reports folder...
 start "" "%~dp0morpheus_reports"
