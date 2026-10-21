@@ -93,6 +93,16 @@ def _med_lines(med, summary: Summary, L: _Layout):
     return t, g, sh, h
 
 
+OUTLINE = HexColor("#C5D0DB")
+
+
+def _outline(c, x, y_bottom, w, h, color, width=1.0, radius=5):
+    """Section border (no background fill)."""
+    c.setStrokeColor(color)
+    c.setLineWidth(width)
+    c.roundRect(x, y_bottom, w, h, radius, stroke=1, fill=0)
+
+
 def _width(text: str, font: str, size: float) -> float:
     from reportlab.pdfbase.pdfmetrics import stringWidth
     return stringWidth(text, font, size)
@@ -126,22 +136,18 @@ def render_one_page(summary: Summary, out_path: str | Path) -> Path:
     def y(top: float) -> float:  # convert top-down coordinate
         return PAGE_H - top
 
-    # ---- header bar
+    # ---- header: logo on white, title and date at right (no filled bar)
+    logo_h = 36
+    c.drawImage(str(ASSETS / "logo_wide.png"), MARGIN, y(6 + logo_h), logo_h * 1600 / 438, logo_h, mask="auto")
     c.setFillColor(NAVY)
-    c.rect(0, y(48), PAGE_W, 48, stroke=0, fill=1)
-    c.drawImage(str(ASSETS / "logo_square.png"), 27, y(42), 37, 37, mask="auto")
-    c.setFillColor(white)
-    c.setFont(BOLD, 14)
-    c.drawString(72, y(22), "MORPHEUS")
-    c.setFont(REG, 7.8)
-    c.drawString(72, y(35), "PRECISION HEALTH  |  PHARMACOGENOMIC MEDICATION SUMMARY")
-    c.setFillColor(HEADER_DATE)
+    c.setFont(BOLD, 10)
+    c.drawRightString(PAGE_W - MARGIN, y(22), "PHARMACOGENOMIC MEDICATION SUMMARY")
+    c.setFillColor(MUTED)
     c.setFont(REG, 7)
-    c.drawRightString(PAGE_W - 36, y(20), fmt_day(rep.reported or date.today(), upper=True))
+    c.drawRightString(PAGE_W - MARGIN, y(34), fmt_day(rep.reported or date.today(), upper=True))
 
     # ---- patient bar
-    c.setFillColor(PANEL)
-    c.roundRect(MARGIN, y(80), PANEL_W, 28, 4, stroke=0, fill=1)
+    _outline(c, MARGIN, y(80), PANEL_W, 28, OUTLINE)
     p = rep.patient
     name = " ".join(x for x in (p.first_name, p.last_name) if x).upper()
     if p.suffix:
@@ -159,8 +165,7 @@ def render_one_page(summary: Summary, out_path: str | Path) -> Path:
     # ---- flagged genes strip
     genes = summary.flagged_genes[:8]
     top = 84
-    c.setFillColor(PANEL)
-    c.roundRect(MARGIN, y(top + 26), PANEL_W, 26, 4, stroke=0, fill=1)
+    _outline(c, MARGIN, y(top + 26), PANEL_W, 26, OUTLINE)
     if genes:
         col = (PANEL_W - 20) / max(6, len(genes))
         for i, g in enumerate(genes):
@@ -199,10 +204,8 @@ def render_one_page(summary: Summary, out_path: str | Path) -> Path:
     cur = avail_top
     if summary.patient_meds:
         h = _meds_height(summary, L)
-        c.setFillColor(PANEL)
-        c.roundRect(PANEL_X, y(cur + h), PANEL_W, h, 5, stroke=0, fill=1)
+        _outline(c, PANEL_X, y(cur + h), PANEL_W, h, NAVY, width=1.4)
         c.setFillColor(NAVY)
-        c.rect(PANEL_X, y(cur + 7 + 15 * L.s), 3.5, 15 * L.s, stroke=0, fill=1)
         c.setFont(BOLD, 9.3 * L.s)
         c.drawString(34, y(cur + 7 + 11 * L.s), f"★ PATIENT MEDICATIONS  ({len(summary.patient_meds)})")
         c.setFillColor(MUTED)
@@ -248,10 +251,8 @@ def render_one_page(summary: Summary, out_path: str | Path) -> Path:
         cards = summary.cards[t]
         style = TIERS[t]
         h = _panel_height(cards, L)
-        c.setFillColor(style["bg"])
-        c.roundRect(PANEL_X, y(cur + h), PANEL_W, h, 5, stroke=0, fill=1)
+        _outline(c, PANEL_X, y(cur + h), PANEL_W, h, style["accent"], width=1.4)
         c.setFillColor(style["accent"])
-        c.rect(PANEL_X, y(cur + 7 + 15 * L.s), 3.5, 15 * L.s, stroke=0, fill=1)
         c.setFont(BOLD, 9.3 * L.s)
         c.drawString(34, y(cur + 7 + 11 * L.s), style["title"])
         c.setFillColor(MUTED)

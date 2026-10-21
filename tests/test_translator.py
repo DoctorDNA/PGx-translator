@@ -264,23 +264,27 @@ def test_medication_matching():
     from pgx_translator.medications import match_entry, split_entries
     assert match_entry("Lipitor 40 mg daily").names == ["Atorvastatin"]
     assert match_entry("Tylenol #3").names == ["Codeine"]
-    assert match_entry("hydrocodone/acetaminophen 5/325").names == ["Hydrocodone"]
+    assert set(match_entry("hydrocodone/acetaminophen 5/325").names) == {"Hydrocodone", "Acetaminophen"}
     assert match_entry("5-FU").names == ["Fluorouracil"]
     typo = match_entry("atorvastatn")
     assert typo.names == ["Atorvastatin"] and typo.fuzzy
+    from pgx_translator.medications import NON_CPIC
     for other in ["lisinopril", "metformin", "trazodone", "hydroxyzine", "clonidine", "amlodipine", "gabapentin"]:
-        assert match_entry(other).names == [], other
+        names = match_entry(other).names
+        assert names and all(n in NON_CPIC for n in names), (other, names)  # never mistaken for a CPIC drug
+    assert match_entry("xylophonazine").names == []
+    assert match_entry("vitamin D3").names == ["Vitamin D"]
     assert split_entries("a, b; c\nd") == ["a", "b", "c", "d"]
 
 
 def test_patient_meds_in_summary(report):
-    s = build_summary(report, ["Lipitor 40 mg", "sertraline", "sevoflurane", "naproxen", "lisinopril"])
+    s = build_summary(report, ["Lipitor 40 mg", "sertraline", "sevoflurane", "naproxen", "xylophonazine"])
     kinds = {m.display_name: (m.kind, m.tier) for m in s.patient_meds}
     assert kinds["Atorvastatin"] == ("rule", YELLOW)
     assert kinds["Sertraline"] == ("rule", GREEN)
     assert kinds["Sevoflurane"][0] == "untested"
     assert kinds["Naproxen"][0] == "norec"
-    assert kinds["lisinopril"][0] == "unknown"
+    assert kinds["xylophonazine"][0] == "unknown"
     assert [m.display_name for m in s.patient_meds][0] == "Atorvastatin"  # actionable first
     assert {"SLCO1B1", "CYP2C19", "CYP2B6"} <= s.patient_genes
     assert any(c.patient and "Atorvastatin" in c.drugs for c in s.cards[YELLOW])
@@ -309,3 +313,17 @@ def test_web_check_endpoint():
     c = app.test_client()
     assert c.get("/check?q=Zoloft").json["cls"] == "ok"
     assert c.get("/check?q=lisinopril").json["cls"] == "none"
+
+
+def test_owner_medication_list(report):
+    """The owner's own list, entered without doses: citalopram, rosuvastatin, omeprazole, olmesartan
+    (typed 'Olmasartan'), Pepcid."""
+    s = build_summary(report, ["Citalopram", "Rosuvastatin", "Omeprazole", "Olmasartan", "pepcid"])
+    got = {m.display_name: (m.kind, m.tier, m.fuzzy) for m in s.patient_meds}
+    assert got["Citalopram"] == ("rule", RED, False)  # CYP2C19 ultrarapid
+    assert got["Omeprazole"] == ("rule", YELLOW, False)  # CYP2C19 ultrarapid: increase dose 100%
+    assert got["Rosuvastatin"] == ("rule", GREEN, False)  # SLCO1B1 decreased + ABCG2 normal
+    assert got["Olmesartan"] == ("none", "grey", True)  # misspelling corrected, flagged
+    assert got["Famotidine"] == ("none", "grey", False)  # Pepcid
+    assert [m.display_name for m in s.patient_meds][:3] == ["Citalopram", "Omeprazole", "Rosuvastatin"]
+    assert s.patient_genes == {"CYP2C19", "SLCO1B1", "ABCG2"}

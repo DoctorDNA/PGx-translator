@@ -13,7 +13,7 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template_string, request, send_file
 
 from .convert import convert
-from .medications import EXTRA_BY_NAME, match_entry, search_terms, split_entries
+from .medications import EXTRA_BY_NAME, NON_CPIC, match_entry, search_terms, split_entries
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
@@ -99,10 +99,12 @@ def check():
     """Live feedback for one typed medication."""
     m = match_entry(request.args.get("q", ""))
     if not m.names:
-        return jsonify(cls="none", note="— no CPIC gene–drug guideline found (check spelling if unexpected)")
+        return jsonify(cls="warn", note="— not recognized; check the spelling or use the generic name")
     names = ", ".join(m.names)
     if m.fuzzy:
         return jsonify(cls="warn", note=f"→ matched {names} by approximate spelling; please confirm")
+    if all(n in NON_CPIC for n in m.names):
+        return jsonify(cls="none", note=f"→ {names}: no CPIC gene–drug guideline")
     if all(n in EXTRA_BY_NAME and EXTRA_BY_NAME[n].short.startswith("No CPIC") for n in m.names):
         return jsonify(cls="none", note=f"→ {names}: CPIC reviewed, no gene-based recommendation")
     return jsonify(cls="ok", note=f"→ {names}")
