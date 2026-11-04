@@ -327,3 +327,23 @@ def test_owner_medication_list(report):
     assert got["Famotidine"] == ("none", "grey", False)  # Pepcid
     assert [m.display_name for m in s.patient_meds][:3] == ["Citalopram", "Omeprazole", "Rosuvastatin"]
     assert s.patient_genes == {"CYP2C19", "SLCO1B1", "ABCG2"}
+
+
+def test_one_page_fits_busy_patient(report, tmp_path):
+    """Many flagged genes and a long medication list still fit on one page."""
+    import pdfplumber
+    r = with_genes(report, CYP2C19=("*2/*2", "Poor Metabolizer"), CYP2D6=("*4/*4", "Poor Metabolizer"),
+                   CYP2C9=("*1/*3", "Intermediate Metabolizer"), SLCO1B1=("*5/*5", "Poor Function"),
+                   UGT1A1=("*28/*28", "Poor Metabolizer"), HLA_B_57_01=("Pos/Neg", "Positive"))
+    meds = ["Citalopram", "Rosuvastatin", "Omeprazole", "Olmesartan", "Pepcid", "Plavix", "Norco", "Zoloft",
+            "Lipitor", "Celebrex", "Toprol XL", "Coumadin", "Ziagen", "lisinopril"]
+    out = render_one_page(build_summary(r, meds), tmp_path / "busy.pdf")
+    with pdfplumber.open(out) as pdf:
+        assert len(pdf.pages) == 1
+
+
+def test_abacavir_cpic_wording(report):
+    neg = _rec(report, "Abacavir")
+    assert neg.tier == GREEN and "does not absolutely rule out" in neg.text
+    pos = _rec(report, "Abacavir", HLA_B_57_01=("Pos/Neg", "Positive"))
+    assert pos.tier == RED and "alternative antiretroviral" in pos.text

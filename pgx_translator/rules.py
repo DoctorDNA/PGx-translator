@@ -721,10 +721,15 @@ def oxcarbazepine(gt: Genotypes) -> Rec:
 
 
 def abacavir(gt: Genotypes) -> Rec:
+    """CPIC 2012/2014 update; wording from supplement v2.0, Tables S6-S8."""
     if gt.code("HLA-B*57:01") == "POS":
-        return Rec(RED, "HLA-B*57:01 positive: do not use (hypersensitivity risk).",
+        return Rec(RED, "HLA-B*57:01 carrier: high risk of abacavir hypersensitivity. Do NOT prescribe abacavir "
+                        "(FDA boxed warning); choose an alternative antiretroviral.",
                    "HLA-B*57:01 positive: do not use.")
-    return _std("No tested HLA restriction.", "May be used.")
+    return _std("No tested HLA restriction.",
+                "HLA-B*57:01 not detected (low risk of hypersensitivity): abacavir may be prescribed. A negative "
+                "result does not absolutely rule out hypersensitivity; observe closely and stop immediately if "
+                "signs or symptoms of hypersensitivity develop.")
 
 
 def allopurinol(gt: Genotypes) -> Rec:
@@ -953,7 +958,7 @@ DRUGS: list[Drug] = [
         G6PD_DAPSONE),
          source="Literature"),
     Drug("Atazanavir", I, ("UGT1A1",), atazanavir, source="CPIC 2015"),
-    Drug("Abacavir", I, ("HLA-B*57:01",), abacavir, source="CPIC 2012/2014"),
+    Drug("Abacavir", I, ("HLA-B*57:01",), abacavir, source="CPIC 2014"),
     Drug("Peginterferon alfa", I, ("IFNL3",), ifnl3, source="CPIC 2014"),
     Drug("Ribavirin", I, ("IFNL3",), ifnl3, source="CPIC 2014"),
     # Oncology, Immunology & Transplant
