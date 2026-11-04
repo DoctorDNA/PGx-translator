@@ -1,6 +1,15 @@
 @echo off
 rem Double-click to open the PGx Translator upload page in your browser.
 cd /d "%~dp0"
+if not exist "%~dp0requirements.txt" (
+  echo.
+  echo This file must be run from the extracted PGx-translator folder,
+  echo not from inside the zip. Right-click the zip, choose "Extract All...",
+  echo open the extracted folder and double-click this file there.
+  echo.
+  pause
+  goto :eof
+)
 set PY=py
 where py >nul 2>nul || set PY=python
 if not exist ".installed" (
