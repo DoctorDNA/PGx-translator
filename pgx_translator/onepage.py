@@ -92,14 +92,14 @@ class _Layout:
 
     def __init__(self, scale: float):
         self.s = scale
-        self.title = 12.0 * scale
-        self.short = 11.5 * scale
-        self.geno = 10.4 * scale
-        self.lh_title = 12.9 * scale
-        self.lh_short = 12.4 * scale
-        self.lh_geno = 11.0 * scale
-        self.card_gap = 3.2 * scale
-        self.panel_head = 8 + 18 * scale
+        self.title = 13.0 * scale
+        self.short = 12.4 * scale
+        self.geno = 11.3 * scale
+        self.lh_title = 13.6 * scale
+        self.lh_short = 13.0 * scale
+        self.lh_geno = 11.6 * scale
+        self.card_gap = 2.6 * scale
+        self.panel_head = 3 + 15 * scale
         self.panel_pad = 2 * scale
 
 
@@ -209,30 +209,23 @@ def render_one_page(summary: Summary, out_path: str | Path) -> Path:
     c.drawImage(str(ASSETS / "logo_wide.png"), MARGIN, y(6 + logo_h), logo_h * 1600 / 438, logo_h, mask="auto")
     c.setFillColor(NAVY)
     c.setFont(BOLD, 13)
-    c.drawRightString(PAGE_W - MARGIN, y(23), "PHARMACOGENOMIC MEDICATION SUMMARY")
-    c.setFillColor(MUTED)
-    c.setFont(REG, 9)
-    c.drawRightString(PAGE_W - MARGIN, y(36), fmt_day(rep.reported or date.today(), upper=True))
-
-    # ---- patient bar
-    _outline(c, MARGIN, y(80), PANEL_W, 28, OUTLINE)
+    c.drawRightString(PAGE_W - MARGIN, y(18), "PHARMACOGENOMIC MEDICATION SUMMARY")
+    # patient details as two condensed lines under the title (no box)
     p = rep.patient
     name = " ".join(x for x in (p.first_name, p.last_name) if x).upper()
     if p.suffix:
         name += f", {p.suffix}"
-    c.setFillColor(NAVY)
-    c.setFont(BOLD, 12)
-    c.drawString(34, y(70), name)
-    meta = f"Quest/CLS  ·  collected {fmt_day(rep.collected)}  ·  reported {fmt_day(rep.reported)}"
-    if p.dob:
-        meta = f"DOB {p.dob.strftime('%m/%d/%Y')}  ·  " + meta
+    dob = f"  ·  DOB {p.dob.strftime('%m/%d/%Y')}" if p.dob else ""
+    c.setFont(BOLD, 11)
+    c.drawRightString(PAGE_W - MARGIN, y(31), name + dob)
     c.setFillColor(MUTED)
-    c.setFont(REG, 9)
-    c.drawString(max(160, 34 + c.stringWidth(name, BOLD, 12) + 24), y(69.5), meta)
+    c.setFont(REG, 8.5)
+    c.drawRightString(PAGE_W - MARGIN, y(42), f"Quest/CLS  ·  collected {fmt_day(rep.collected)}  ·  "
+                                              f"reported {fmt_day(rep.reported)}")
 
     # ---- flagged genes strip
     genes = summary.flagged_genes[:8]
-    top = 84
+    top = 48
     _outline(c, MARGIN, y(top + 26), PANEL_W, 26, OUTLINE)
     if genes:
         col = (PANEL_W - 20) / max(6, len(genes))
@@ -255,7 +248,7 @@ def render_one_page(summary: Summary, out_path: str | Path) -> Path:
         c.drawString(34, y(top + 16), "No non-normal gene results on this panel")
 
     # ---- tier panels, auto-scaled to fit
-    avail_top, avail_bottom = 114, 738
+    avail_top, avail_bottom = top + 30, 750
     gap = 5
     tiers = [t for t in (RED, YELLOW, GREEN) if summary.cards.get(t)]
     n_panels = len(tiers) + (1 if summary.patient_meds else 0)
@@ -276,10 +269,11 @@ def render_one_page(summary: Summary, out_path: str | Path) -> Path:
         _outline(c, PANEL_X, y(cur + h), PANEL_W, h, NAVY, width=1.4)
         c.setFillColor(NAVY)
         c.setFont(BOLD, 11 * L.s)
-        c.drawString(34, y(cur + 4 + 11 * L.s), f"★ PATIENT MEDICATIONS  ({len(summary.patient_meds)})")
+        head = f"★ PATIENT MEDICATIONS  ({len(summary.patient_meds)})"
+        c.drawString(34, y(cur + 4 + 11 * L.s), head)
         c.setFillColor(MUTED)
         c.setFont(REG, 8)
-        c.drawRightString(PANEL_X + PANEL_W - 10, y(cur + 4 + 11 * L.s),
+        c.drawString(34 + _w(head, BOLD, 11 * L.s) + 10, y(cur + 4 + 11 * L.s), "·  " +
                           "Box color = this patient's recommendation  ·  grey = no CPIC gene-based guidance")
         row_top = cur + L.panel_head
         meds = summary.patient_meds
@@ -324,9 +318,10 @@ def render_one_page(summary: Summary, out_path: str | Path) -> Path:
         c.setFillColor(style["accent"])
         c.setFont(BOLD, 11 * L.s)
         c.drawString(34, y(cur + 4 + 11 * L.s), style["title"])
+        # note sits right after the title (left side), so it never collides with the right-hand column
         c.setFillColor(MUTED)
         c.setFont(REG, 8)
-        c.drawRightString(PANEL_X + PANEL_W - 10, y(cur + 4 + 11 * L.s), style["note"])
+        c.drawString(34 + _w(style["title"], BOLD, 11 * L.s) + 10, y(cur + 4 + 11 * L.s), "·  " + style["note"])
 
         placed, _ = _columns(cards, L)
         for card, j, off, ch in placed:
@@ -360,28 +355,28 @@ def render_one_page(summary: Summary, out_path: str | Path) -> Path:
     # ---- footer
     c.setStrokeColor(RULE)
     c.setLineWidth(0.8)
-    c.line(MARGIN, y(744), PAGE_W - MARGIN, y(744))
+    c.line(MARGIN, y(754), PAGE_W - MARGIN, y(754))
     c.setFillColor(BLUE)
     c.setFont(BOLD, 8.5)
-    c.drawString(MARGIN, y(755), "NO CPIC DOSE CHANGE:")
+    c.drawString(MARGIN, y(764), "NO CPIC DOSE CHANGE:")
     c.setFillColor(INK)
     c.setFont(REG, 8.5)
     nc = "  ·  ".join(summary.no_change) if summary.no_change else "—"
     nc_lines = simpleSplit(nc.replace("  ·  ", " · "), REG, 8.5, PAGE_W - 2 * MARGIN - 122)
     for i, line in enumerate(nc_lines[:2]):
-        c.drawString(MARGIN + 122, y(755 + i * 8.5), line)
+        c.drawString(MARGIN + 122, y(764 + i * 8.5), line)
     extra = 8.5 * (min(len(nc_lines), 2) - 1)
     c.setFillColor(MUTED)
     c.setFont(REG, 7.8)
-    c.drawString(MARGIN, y(767 + extra),
+    c.drawString(MARGIN, y(774 + extra),
                  "Colors reflect tested PGx results only. Consider interactions, organ function, "
                  "indication and monitoring.")
-    c.drawString(MARGIN, y(782),
+    c.drawString(MARGIN, y(785),
                  f"Quest panel {fmt_day(rep.reported)}  |  CPIC: cpicpgx.org/guidelines  |  "
                  "Morpheus Precision Health")
     c.setFillColor(BLUE)
     c.setFont(BOLD, 7.8)
-    c.drawRightString(PAGE_W - 36, y(782), "1 / 1")
+    c.drawRightString(PAGE_W - 36, y(785), "1 / 1")
 
     c.showPage()
     c.save()
