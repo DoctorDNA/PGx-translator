@@ -36,10 +36,11 @@ A checked drug shows the guideline year in its source (e.g. "CPIC 2019") on ever
 | CYP2C19 & voriconazole, 2016 (CPT 2017), Table 2 (adults) | voriconazole | Tiers matched (UM/RM and PM → alternative; NM/IM standard). Added CPIC alternatives, PM "lower dose with careful drug monitoring if voriconazole is required", trough range, and that the pediatric table (Table 3) differs. | 2026-10-14 |
 | CYP2D6 & tamoxifen, 2018, Table 2 | tamoxifen | Tiers matched (IM incl. AS 1.0 yellow; PM red). Recommendation now leads with aromatase inhibitor (± ovarian suppression), with 40 mg/day only if aromatase inhibitors are contraindicated, and avoiding moderate/strong CYP2D6 inhibitors. | 2026-10-14 |
 | CYP3A5 & tacrolimus, 2015, Table 2 | tacrolimus | Tiers matched (expressers 1.5–2× start, max 0.3 mg/kg/day; nonexpressers standard; TDM for all). CYP3A4\*22 note kept but labeled as outside the CPIC guideline. | 2026-10-14 |
+| CYP2C9/VKORC1/CYP4F2 & warfarin, 2017 update, Figure 2 | warfarin | **Changed.** Algorithm dosing kept (yellow). Added: CYP2C9\*5/\*6/\*8/\*11 carriers → decrease calculated dose 15–30% (20–40% if two alleles); CYP4F2\*3 carriers → increase 5–10% (non-African ancestry); rs12777823 A carriers (African Americans) → decrease 10–25%, noted as not on panel; optional EU-PACT loading dose. CYP2C9 poor metabolizer (e.g. \*2/\*3, \*3/\*3) → consider an alternative anticoagulant (**red**; previously red only with VKORC1 A/A). | 2026-11-05 |
 
 ## Not yet checked
 
-Warfarin (CYP2C9, VKORC1, CYP4F2) — the only CPIC-based rule not yet checked against its guideline.
+None — every CPIC-based rule has been checked against a guideline document.
 Esomeprazole and rabeprazole have no CPIC recommendation (listed as "CPIC (no rec)").
 
 Non-CPIC rules (Literature / FDA label / DPWG): procainamide, isoniazid, dapsone, sulfasalazine,

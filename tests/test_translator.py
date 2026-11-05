@@ -347,3 +347,12 @@ def test_abacavir_cpic_wording(report):
     assert neg.tier == GREEN and "does not absolutely rule out" in neg.text
     pos = _rec(report, "Abacavir", HLA_B_57_01=("Pos/Neg", "Positive"))
     assert pos.tier == RED and "alternative antiretroviral" in pos.text
+
+
+def test_warfarin_cpic_2017(report):
+    base = _rec(report, "Warfarin")  # CYP2C9 *1/*1, VKORC1 G/G
+    assert base.tier == YELLOW and "algorithm" in base.text and "15–30%" not in base.text
+    assert _rec(report, "Warfarin", CYP2C9=("*2/*3", "Poor Metabolizer")).tier == RED
+    assert "15–30%" in _rec(report, "Warfarin", CYP2C9=("*1/*8", "Intermediate Metabolizer")).text
+    assert "20–40%" in _rec(report, "Warfarin", CYP2C9=("*5/*6", "Poor Metabolizer")).text
+    assert "5–10%" in _rec(report, "Warfarin", CYP4F2=("*1/*3", "Decreased Function")).text

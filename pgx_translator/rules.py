@@ -20,7 +20,7 @@ from typing import Callable, Optional
 
 from .phenotypes import GREEN, RED, YELLOW, Genotypes
 
-RULES_VERSION = "3.0"
+RULES_VERSION = "3.1"
 
 CATEGORIES = [
     "Cardiology & Lipids",
@@ -591,18 +591,28 @@ def fluvastatin(gt: Genotypes) -> Rec:
 # --------------------------------------------------------------------------- warfarin
 
 def warfarin(gt: Genotypes) -> Rec:
-    v = gt.code("VKORC1")
-    detail = {
-        "LOW": "VKORC1 result predicts a higher-than-average dose requirement.",
-        "INT": "VKORC1 result predicts an intermediate dose requirement.",
-        "HIGH": "VKORC1 result predicts a lower-than-average dose requirement.",
-    }[v]
-    c9 = gt.code("CYP2C9")
-    if c9 in ("IM", "PM"):
-        detail += " Reduced CYP2C9 function lowers the dose and slows time to stable INR."
-    tier = RED if (v == "HIGH" and c9 == "PM") else YELLOW
-    return Rec(tier, "Use a validated pharmacogenetic dosing algorithm; " + detail,
-               "Use PGx dosing algorithm; titrate to INR.")
+    """CPIC 2017 update, Figure 2 (adults) and text. Ancestry is not on the lab report, so both the
+    non-African and African-ancestry steps are stated."""
+    v, c9 = gt.code("VKORC1"), gt.code("CYP2C9")
+    sens = {"LOW": "VKORC1 -1639 G/G (higher-than-average dose expected)",
+            "INT": "VKORC1 -1639 G/A (increased sensitivity; lower dose expected)",
+            "HIGH": "VKORC1 -1639 A/A (increased sensitivity; lower dose expected)"}[v]
+    text = ("Calculate the dose with a validated pharmacogenetic algorithm (Gage or IWPC, e.g. warfarindosing.org) "
+            f"using VKORC1 and CYP2C9*2/*3; titrate to INR. {sens}.")
+    african = [a for a in ("*5", "*6", "*8", "*11") if gt.has_allele("CYP2C9", a)]
+    if african:
+        n = sum(1 for a in gt["CYP2C9"].genotype.replace(" ", "").split("/") if a.split(".")[0] in african)
+        text += (f" CYP2C9 {', '.join(african)} carrier: decrease the calculated dose by "
+                 + ("20–40% (two variant alleles)." if n >= 2 else "15–30%."))
+    if gt.has_allele("CYP4F2", "*3"):
+        text += (" CYP4F2*3 carrier: increase the dose by 5–10% (non-African ancestry; no recommendation in "
+                 "African ancestry).")
+    text += (" African ancestry: rs12777823 is not on this panel; if an A allele is found, decrease the dose by "
+             "10–25% (African Americans). A pharmacogenetic loading-dose algorithm (EU-PACT) is optional.")
+    if c9 == "PM":
+        return Rec(RED, "CYP2C9 poor metabolizer: consider an alternative oral anticoagulant. If warfarin is used: "
+                        + text, "Consider alternative anticoagulant; if used, PGx algorithm.")
+    return Rec(YELLOW, text, "Use PGx dosing algorithm; titrate to INR.")
 
 
 # --------------------------------------------------------------------------- CYP2C9
@@ -890,7 +900,7 @@ DRUGS: list[Drug] = [
     Drug("Pitavastatin", C, ("SLCO1B1",), pitavastatin, source="CPIC 2022"),
     Drug("Pravastatin", C, ("SLCO1B1",), pravastatin, source="CPIC 2022"),
     Drug("Fluvastatin", C, ("SLCO1B1", "CYP2C9"), fluvastatin, source="CPIC 2022"),
-    Drug("Warfarin", C, ("CYP2C9", "VKORC1", "CYP4F2"), warfarin),
+    Drug("Warfarin", C, ("CYP2C9", "VKORC1", "CYP4F2"), warfarin, source="CPIC 2017"),
     Drug("Hydralazine", C, ("NAT2",), hydralazine, source="CPIC 2025"),
     Drug("Procainamide", C, ("NAT2",), _nat2_literature(
         RED, "Higher exposure and drug-induced lupus risk in slow acetylators.",
