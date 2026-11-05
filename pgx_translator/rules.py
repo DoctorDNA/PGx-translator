@@ -479,7 +479,7 @@ def simvastatin(gt: Genotypes) -> Rec:
     c = gt.code("SLCO1B1")
     if c == "DF":
         return Rec(RED, "Prescribe an alternative statin depending on desired potency. If simvastatin is warranted, "
-                        "limit the dose to <20 mg/day.", "Alternative statin; if used: simva <20, lova ≤20 mg/day.")
+                        "limit the dose to <20 mg/day.", "Alternative statin; if used: simvastatin <20 mg/day, lovastatin ≤20 mg/day.")
     if c == "PF":
         return Rec(RED, "Prescribe an alternative statin depending on desired potency.", "Alternative statin.")
     return _std("Standard start.", "Prescribe desired starting dose and adjust per disease-specific guidelines.")
@@ -490,7 +490,7 @@ def lovastatin(gt: Genotypes) -> Rec:
     c = gt.code("SLCO1B1")
     if c == "DF":
         return Rec(RED, "Prescribe an alternative statin depending on desired potency. If lovastatin is warranted, "
-                        "limit the dose to ≤20 mg/day.", "Alternative statin; if used: simva <20, lova ≤20 mg/day.")
+                        "limit the dose to ≤20 mg/day.", "Alternative statin; if used: simvastatin <20 mg/day, lovastatin ≤20 mg/day.")
     if c == "PF":
         return Rec(RED, "Prescribe an alternative statin depending on desired potency.", "Alternative statin.")
     return _std("Standard start.", "Prescribe desired starting dose and adjust per disease-specific guidelines.")
